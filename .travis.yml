@@ -37,7 +37,7 @@ script:
  - flake8 --max-line-length=88 enhydris_autoprocess
  - isort --recursive --check-only --diff enhydris_autoprocess
  - ./manage.py makemigrations --check
- - coverage run --include="./enhydris_autoprocess" --omit="*/tests/*","*/tests.py" ./manage.py test -v2 enhydris_autoprocess
+ - coverage run --include="./enhydris_autoprocess/*" --omit="*/tests/*","*/tests.py" ./manage.py test -v2 enhydris_autoprocess
 
 after_success:
  - codecov

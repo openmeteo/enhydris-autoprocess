@@ -1,6 +1,7 @@
 import datetime as dt
 from unittest.mock import patch
 
+from django.db import IntegrityError
 from django.test import TestCase
 
 import numpy as np
@@ -14,34 +15,82 @@ from enhydris_autoprocess.models import RangeCheck, Validation
 
 class ValidationTestCase(TestCase):
     def setUp(self):
-        self.source_timeseries = mommy.make(Timeseries)
-        self.target_timeseries = mommy.make(Timeseries)
+        self.station1 = mommy.make(Station)
+        self.timeseries1_1 = mommy.make(Timeseries, gentity=self.station1)
+        self.timeseries1_2 = mommy.make(Timeseries, gentity=self.station1)
+        self.timeseries1_3 = mommy.make(Timeseries, gentity=self.station1)
+        self.station2 = mommy.make(Station)
+        self.timeseries2_1 = mommy.make(Timeseries, gentity=self.station2)
+        self.timeseries2_2 = mommy.make(Timeseries, gentity=self.station2)
+        self.timeseries2_3 = mommy.make(Timeseries, gentity=self.station2)
 
     def test_create(self):
         validation = Validation(
-            source_timeseries=self.source_timeseries,
-            target_timeseries=self.target_timeseries,
+            station=self.station1,
+            source_timeseries=self.timeseries1_1,
+            target_timeseries=self.timeseries1_2,
         )
         validation.save()
         self.assertEqual(Validation.objects.count(), 1)
 
     def test_update(self):
-        mommy.make(Validation)
+        mommy.make(
+            Validation,
+            station=self.station1,
+            source_timeseries=self.timeseries1_1,
+            target_timeseries=self.timeseries1_2,
+        )
         validation = Validation.objects.first()
-        assert validation.target_timeseries.id != self.target_timeseries.id
-        validation.target_timeseries = self.target_timeseries
+        validation.target_timeseries = self.timeseries1_3
         validation.save()
-        self.assertEqual(validation.target_timeseries.id, self.target_timeseries.id)
+        self.assertEqual(validation.target_timeseries.id, self.timeseries1_3.id)
 
     def test_delete(self):
-        mommy.make(Validation)
+        mommy.make(
+            Validation,
+            station=self.station1,
+            source_timeseries=self.timeseries1_1,
+            target_timeseries=self.timeseries1_2,
+        )
         validation = Validation.objects.first()
         validation.delete()
         self.assertEqual(Validation.objects.count(), 0)
 
-    @patch("enhydris.models.Timeseries.__str__", return_value="hello")
-    def test_str(self, m):
-        self.assertEqual(str(self.source_timeseries), "hello")
+    def test_str(self):
+        validation = mommy.make(
+            Validation,
+            station=self.station1,
+            source_timeseries=self.timeseries1_1,
+            target_timeseries=self.timeseries1_2,
+        )
+        saved_str = Timeseries.__str__
+        try:
+            Timeseries.__str__ = lambda self: "hello" + str(self.id)
+            self.assertEqual(str(validation), "hello" + str(self.timeseries1_1.id))
+        finally:
+            Timeseries.__str__ = saved_str
+
+    def test_only_accepts_source_timeseries_from_station(self):
+        validation = mommy.make(
+            Validation,
+            station=self.station1,
+            source_timeseries=self.timeseries1_1,
+            target_timeseries=self.timeseries1_2,
+        )
+        validation.source_timeseries = self.timeseries2_1
+        with self.assertRaises(IntegrityError):
+            validation.save()
+
+    def test_only_accepts_target_timeseries_from_station(self):
+        validation = mommy.make(
+            Validation,
+            station=self.station1,
+            source_timeseries=self.timeseries1_1,
+            target_timeseries=self.timeseries1_2,
+        )
+        validation.target_timeseries = self.timeseries2_1
+        with self.assertRaises(IntegrityError):
+            validation.save()
 
 
 @RandomEnhydrisTimeseriesDataDir()
@@ -54,6 +103,7 @@ class ValidationPerformTestCase(TestCase):
         self.target_timeseries = mommy.make(Timeseries, gentity=station)
         self.validation = mommy.make(
             Validation,
+            station=station,
             source_timeseries=self.source_timeseries,
             target_timeseries=self.target_timeseries,
         )
@@ -105,6 +155,7 @@ class ValidationPerformDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
         )
         self.validation = mommy.make(
             Validation,
+            station=station,
             source_timeseries=self.source_timeseries,
             target_timeseries=self.target_timeseries,
         )
@@ -143,29 +194,38 @@ class ValidationPerformDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
 
 
 class RangeCheckTestCase(TestCase):
+    def setUp(self):
+        station = mommy.make(Station)
+        self.validation = mommy.make(
+            Validation,
+            station=station,
+            source_timeseries__gentity=station,
+            target_timeseries__gentity=station,
+        )
+
     def test_create(self):
         range_check = RangeCheck(
-            validation=mommy.make(Validation), upper_bound=42.7, lower_bound=-5.2
+            validation=self.validation, upper_bound=42.7, lower_bound=-5.2
         )
         range_check.save()
         self.assertEqual(RangeCheck.objects.count(), 1)
 
     def test_update(self):
-        mommy.make(RangeCheck, upper_bound=55.0)
+        mommy.make(RangeCheck, validation=self.validation, upper_bound=55.0)
         range_check = RangeCheck.objects.first()
         range_check.upper_bound = 1831.7
         range_check.save()
         self.assertAlmostEqual(range_check.upper_bound, 1831.7)
 
     def test_delete(self):
-        mommy.make(RangeCheck)
+        mommy.make(RangeCheck, validation=self.validation)
         range_check = RangeCheck.objects.first()
         range_check.delete()
         self.assertEqual(RangeCheck.objects.count(), 0)
 
     @patch("enhydris_autoprocess.models.RangeCheck.__str__", return_value="hello")
     def test_str(self, m):
-        range_check = mommy.make(RangeCheck)
+        range_check = mommy.make(RangeCheck, validation=self.validation)
         self.assertEqual(str(range_check), "hello")
 
 
@@ -197,6 +257,14 @@ class RangeCheckPerformTestCase(TestCase):
     )
 
     def test_perform(self):
-        self.range_check = mommy.make(RangeCheck, lower_bound=3, upper_bound=5)
+        station = mommy.make(Station)
+        self.range_check = mommy.make(
+            RangeCheck,
+            lower_bound=3,
+            upper_bound=5,
+            validation__station=station,
+            validation__source_timeseries__gentity=station,
+            validation__target_timeseries__gentity=station,
+        )
         self.range_check.perform(self.source_timeseries)
         pd.testing.assert_frame_equal(self.source_timeseries, self.expected_result)

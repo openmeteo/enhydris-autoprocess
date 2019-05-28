@@ -1,14 +1,15 @@
 import datetime as dt
 
-from django.db import models
+from django.db import IntegrityError, models
 
 import numpy as np
 import pandas as pd
 
-from enhydris.models import Timeseries
+from enhydris.models import Station, Timeseries
 
 
 class Validation(models.Model):
+    station = models.ForeignKey(Station, on_delete=models.CASCADE)
     source_timeseries = models.OneToOneField(
         Timeseries, on_delete=models.CASCADE, related_name="validation"
     )
@@ -31,6 +32,20 @@ class Validation(models.Model):
         if start_date:
             start_date += dt.timedelta(minutes=1)
         return start_date
+
+    def save(self, *args, **kwargs):
+        self._check_integrity()
+        return super().save(*args, **kwargs)
+
+    def _check_integrity(self):
+        if self.source_timeseries.gentity.id != self.station.id:
+            raise IntegrityError(
+                "Validation.source_timeseries must belong to Validation.station"
+            )
+        if self.target_timeseries.gentity.id != self.station.id:
+            raise IntegrityError(
+                "Validation.target_timeseries must belong to Validation.station"
+            )
 
 
 class RangeCheck(models.Model):

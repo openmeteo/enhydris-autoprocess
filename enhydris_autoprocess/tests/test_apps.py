@@ -4,6 +4,7 @@ from django.test import TestCase
 
 from model_mommy import mommy
 
+from enhydris.models import Station
 from enhydris_autoprocess import tasks
 from enhydris_autoprocess.models import Validation
 
@@ -17,6 +18,12 @@ class EnqueueValidationTestCase(TestCase):
         tasks.perform_validation = self.original_perform_validation
 
     def test_enqueues_validation(self):
-        validation = mommy.make(Validation)
+        station = mommy.make(Station)
+        validation = mommy.make(
+            Validation,
+            station=station,
+            source_timeseries__gentity=station,
+            target_timeseries__gentity=station,
+        )
         validation.source_timeseries.save()
         tasks.perform_validation.delay.assert_any_call(validation)

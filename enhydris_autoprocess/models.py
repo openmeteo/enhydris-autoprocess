@@ -7,6 +7,8 @@ import pandas as pd
 
 from enhydris.models import Station, Timeseries
 
+from . import tasks
+
 
 class Validation(models.Model):
     station = models.ForeignKey(Station, on_delete=models.CASCADE)
@@ -35,7 +37,9 @@ class Validation(models.Model):
 
     def save(self, *args, **kwargs):
         self._check_integrity()
-        return super().save(*args, **kwargs)
+        result = super().save(*args, **kwargs)
+        tasks.perform_validation.delay(self.id)
+        return result
 
     def _check_integrity(self):
         if self.source_timeseries.gentity.id != self.station.id:
@@ -56,7 +60,8 @@ class RangeCheck(models.Model):
     def __str__(self):
         return str(self.validation)
 
-    def perform(self, timeseries):
+    def perform(self, ahtimeseries):
+        timeseries = ahtimeseries.data
         out_of_bounds_mask = ~pd.isnull(timeseries["value"]) & ~timeseries[
             "value"
         ].between(self.lower_bound, self.upper_bound)

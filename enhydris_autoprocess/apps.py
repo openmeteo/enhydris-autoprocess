@@ -8,7 +8,7 @@ def enqueue_validation(sender, *, instance, **kwargs):
     from enhydris.models import Timeseries
 
     try:
-        tasks.perform_validation.delay(instance.validation)
+        tasks.perform_validation.delay(instance.validation.id)
     except Timeseries.validation.RelatedObjectDoesNotExist:
         pass
 

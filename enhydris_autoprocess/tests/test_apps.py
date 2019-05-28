@@ -26,4 +26,4 @@ class EnqueueValidationTestCase(TestCase):
             target_timeseries__gentity=station,
         )
         validation.source_timeseries.save()
-        tasks.perform_validation.delay.assert_any_call(validation)
+        tasks.perform_validation.delay.assert_any_call(validation.id)

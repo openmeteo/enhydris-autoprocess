@@ -13,6 +13,7 @@ addons:
       - libgdal-dev
       - python3-psycopg2
       - postgresql-9.5-postgis-2.4
+      - rabbitmq-server
 
 install:
  - CPLUS_INCLUDE_PATH=/usr/include/gdal C_INCLUDE_PATH=/usr/include/gdal pip install 'gdal<1.11'

@@ -32,7 +32,7 @@ class ValidationForm(forms.ModelForm):
         self.fields["source_timeseries"].queryset = t.filter(gentity=self.station)
         self.fields["target_timeseries"].queryset = t.filter(gentity=self.station)
         instance = kwargs.get("instance")
-        if instance is not None:
+        if instance is not None and hasattr(instance, "rangecheck"):
             self.fields["upper_bound"].initial = instance.rangecheck.upper_bound
             self.fields["lower_bound"].initial = instance.rangecheck.lower_bound
 
@@ -41,8 +41,8 @@ class ValidationForm(forms.ModelForm):
         fields = (
             "source_timeseries",
             "target_timeseries",
-            "upper_bound",
             "lower_bound",
+            "upper_bound",
         )
 
     def save(self, instance=None, commit=True):

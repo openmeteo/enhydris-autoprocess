@@ -67,8 +67,8 @@ class RangeCheck(models.Model):
         ].between(self.lower_bound, self.upper_bound)
         timeseries.loc[out_of_bounds_mask, "value"] = np.nan
 
-        out_of_bounds_with_no_flags_mask = (
-            out_of_bounds_mask & (timeseries["flags"] == "")
+        out_of_bounds_with_no_flags_mask = out_of_bounds_mask & (
+            timeseries["flags"] == ""
         )
         out_of_bounds_with_flags_mask = (
             out_of_bounds_mask & ~out_of_bounds_with_no_flags_mask

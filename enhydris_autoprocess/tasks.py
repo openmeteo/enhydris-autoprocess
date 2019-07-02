@@ -1,4 +1,4 @@
-from .celery import app
+from enhydris.celery import app
 
 
 @app.task

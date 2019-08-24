@@ -34,5 +34,5 @@ General Public License.
 
 - Run ``celery``.
 
-- Go to the admin, visit a station, and see the "Validation" section at
-  the bottom.
+- Go to the admin, visit a station, and see the "auto-process" section
+  at the bottom.

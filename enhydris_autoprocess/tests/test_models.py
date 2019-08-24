@@ -12,10 +12,10 @@ from model_mommy import mommy
 from enhydris.models import Station, Timeseries
 from enhydris.tests import RandomEnhydrisTimeseriesDataDir
 from enhydris_autoprocess import tasks
-from enhydris_autoprocess.models import RangeCheck, Validation
+from enhydris_autoprocess.models import AutoProcess, RangeCheck
 
 
-class ValidationTestCase(TestCase):
+class AutoProcessTestCase(TestCase):
     def setUp(self):
         self.station1 = mommy.make(Station)
         self.timeseries1_1 = mommy.make(Timeseries, gentity=self.station1)
@@ -26,47 +26,47 @@ class ValidationTestCase(TestCase):
         self.timeseries2_2 = mommy.make(Timeseries, gentity=self.station2)
         self.timeseries2_3 = mommy.make(Timeseries, gentity=self.station2)
 
-        self.original_perform_validation = tasks.perform_validation
-        tasks.perform_validation = mock.MagicMock()
+        self.original_execute_auto_process = tasks.execute_auto_process
+        tasks.execute_auto_process = mock.MagicMock()
 
     def tearDown(self):
-        tasks.perform_validation = self.original_perform_validation
+        tasks.execute_auto_process = self.original_execute_auto_process
 
     def test_create(self):
-        validation = Validation(
+        auto_process = AutoProcess(
             station=self.station1,
             source_timeseries=self.timeseries1_1,
             target_timeseries=self.timeseries1_2,
         )
-        validation.save()
-        self.assertEqual(Validation.objects.count(), 1)
+        auto_process.save()
+        self.assertEqual(AutoProcess.objects.count(), 1)
 
     def test_update(self):
         mommy.make(
-            Validation,
+            AutoProcess,
             station=self.station1,
             source_timeseries=self.timeseries1_1,
             target_timeseries=self.timeseries1_2,
         )
-        validation = Validation.objects.first()
-        validation.target_timeseries = self.timeseries1_3
-        validation.save()
-        self.assertEqual(validation.target_timeseries.id, self.timeseries1_3.id)
+        auto_process = AutoProcess.objects.first()
+        auto_process.target_timeseries = self.timeseries1_3
+        auto_process.save()
+        self.assertEqual(auto_process.target_timeseries.id, self.timeseries1_3.id)
 
     def test_delete(self):
         mommy.make(
-            Validation,
+            AutoProcess,
             station=self.station1,
             source_timeseries=self.timeseries1_1,
             target_timeseries=self.timeseries1_2,
         )
-        validation = Validation.objects.first()
-        validation.delete()
-        self.assertEqual(Validation.objects.count(), 0)
+        auto_process = AutoProcess.objects.first()
+        auto_process.delete()
+        self.assertEqual(AutoProcess.objects.count(), 0)
 
     def test_str(self):
-        validation = mommy.make(
-            Validation,
+        auto_process = mommy.make(
+            AutoProcess,
             station=self.station1,
             source_timeseries=self.timeseries1_1,
             target_timeseries=self.timeseries1_2,
@@ -74,47 +74,47 @@ class ValidationTestCase(TestCase):
         saved_str = Timeseries.__str__
         try:
             Timeseries.__str__ = lambda self: "hello" + str(self.id)
-            self.assertEqual(str(validation), "hello" + str(self.timeseries1_1.id))
+            self.assertEqual(str(auto_process), "hello" + str(self.timeseries1_1.id))
         finally:
             Timeseries.__str__ = saved_str
 
     def test_only_accepts_source_timeseries_from_station(self):
-        validation = mommy.make(
-            Validation,
+        auto_process = mommy.make(
+            AutoProcess,
             station=self.station1,
             source_timeseries=self.timeseries1_1,
             target_timeseries=self.timeseries1_2,
         )
-        validation.source_timeseries = self.timeseries2_1
+        auto_process.source_timeseries = self.timeseries2_1
         with self.assertRaises(IntegrityError):
-            validation.save()
+            auto_process.save()
 
     def test_only_accepts_target_timeseries_from_station(self):
-        validation = mommy.make(
-            Validation,
+        auto_process = mommy.make(
+            AutoProcess,
             station=self.station1,
             source_timeseries=self.timeseries1_1,
             target_timeseries=self.timeseries1_2,
         )
-        validation.target_timeseries = self.timeseries2_1
+        auto_process.target_timeseries = self.timeseries2_1
         with self.assertRaises(IntegrityError):
-            validation.save()
+            auto_process.save()
 
-    def test_save_triggers_validation(self):
-        validation = Validation(
+    def test_save_triggers_auto_process(self):
+        auto_process = AutoProcess(
             station=self.station1,
             source_timeseries=self.timeseries1_1,
             target_timeseries=self.timeseries1_2,
         )
-        validation.save()
-        tasks.perform_validation.delay.assert_any_call(validation.id)
+        auto_process.save()
+        tasks.execute_auto_process.delay.assert_any_call(auto_process.id)
 
 
 @RandomEnhydrisTimeseriesDataDir()
-class ValidationPerformTestCase(TestCase):
-    @mock.patch("enhydris_autoprocess.models.RangeCheck.perform")
+class AutoProcessExecuteTestCase(TestCase):
+    @mock.patch("enhydris_autoprocess.models.RangeCheck.execute")
     def setUp(self, m):
-        self.mock_perform = m
+        self.mock_execute = m
         station = mommy.make(Station)
         self.source_timeseries = mommy.make(
             Timeseries, gentity=station, variable__descr="irrelevant"
@@ -122,29 +122,29 @@ class ValidationPerformTestCase(TestCase):
         self.target_timeseries = mommy.make(
             Timeseries, gentity=station, variable__descr="irrelevant"
         )
-        self.validation = mommy.make(
-            Validation,
+        self.auto_process = mommy.make(
+            AutoProcess,
             station=station,
             source_timeseries=self.source_timeseries,
             target_timeseries=self.target_timeseries,
         )
-        self.range_check = mommy.make(RangeCheck, validation=self.validation)
-        self.validation.perform()
+        self.range_check = mommy.make(RangeCheck, auto_process=self.auto_process)
+        self.auto_process.execute()
 
     def test_called_once(self):
-        self.assertEqual(len(self.mock_perform.mock_calls), 1)
+        self.assertEqual(len(self.mock_execute.mock_calls), 1)
 
     def test_called_with_empty_content(self):
-        args = self.mock_perform.mock_calls[0][1]
+        args = self.mock_execute.mock_calls[0][1]
         ahtimeseries = args[0]
         self.assertEqual(len(ahtimeseries.data), 0)
 
 
 @RandomEnhydrisTimeseriesDataDir()
-class ValidationPerformDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
-    @mock.patch("enhydris_autoprocess.models.RangeCheck.perform")
+class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
+    @mock.patch("enhydris_autoprocess.models.RangeCheck.execute")
     def setUp(self, m):
-        self.mock_perform = m
+        self.mock_execute = m
         station = mommy.make(Station)
         self.source_timeseries = mommy.make(
             Timeseries, gentity=station, time_zone__utc_offset=0, variable__descr="h"
@@ -174,20 +174,20 @@ class ValidationPerformDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
                 ],
             )
         )
-        self.validation = mommy.make(
-            Validation,
+        self.auto_process = mommy.make(
+            AutoProcess,
             station=station,
             source_timeseries=self.source_timeseries,
             target_timeseries=self.target_timeseries,
         )
-        self.range_check = mommy.make(RangeCheck, validation=self.validation)
-        self.validation.perform()
+        self.range_check = mommy.make(RangeCheck, auto_process=self.auto_process)
+        self.auto_process.execute()
 
     def test_called_once(self):
-        self.assertEqual(len(self.mock_perform.mock_calls), 1)
+        self.assertEqual(len(self.mock_execute.mock_calls), 1)
 
     def test_called_with_the_newer_part_of_the_timeseries(self):
-        args = self.mock_perform.mock_calls[0][1]
+        args = self.mock_execute.mock_calls[0][1]
         ahtimeseries = args[0]
         expected_arg = pd.DataFrame(
             data={"value": [3.0, 4.0], "flags": ["", ""]},
@@ -217,8 +217,8 @@ class ValidationPerformDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
 class RangeCheckTestCase(TestCase):
     def setUp(self):
         station = mommy.make(Station)
-        self.validation = mommy.make(
-            Validation,
+        self.auto_process = mommy.make(
+            AutoProcess,
             station=station,
             source_timeseries__gentity=station,
             target_timeseries__gentity=station,
@@ -226,31 +226,31 @@ class RangeCheckTestCase(TestCase):
 
     def test_create(self):
         range_check = RangeCheck(
-            validation=self.validation, upper_bound=42.7, lower_bound=-5.2
+            auto_process=self.auto_process, upper_bound=42.7, lower_bound=-5.2
         )
         range_check.save()
         self.assertEqual(RangeCheck.objects.count(), 1)
 
     def test_update(self):
-        mommy.make(RangeCheck, validation=self.validation, upper_bound=55.0)
+        mommy.make(RangeCheck, auto_process=self.auto_process, upper_bound=55.0)
         range_check = RangeCheck.objects.first()
         range_check.upper_bound = 1831.7
         range_check.save()
         self.assertAlmostEqual(range_check.upper_bound, 1831.7)
 
     def test_delete(self):
-        mommy.make(RangeCheck, validation=self.validation)
+        mommy.make(RangeCheck, auto_process=self.auto_process)
         range_check = RangeCheck.objects.first()
         range_check.delete()
         self.assertEqual(RangeCheck.objects.count(), 0)
 
     @mock.patch("enhydris_autoprocess.models.RangeCheck.__str__", return_value="hello")
     def test_str(self, m):
-        range_check = mommy.make(RangeCheck, validation=self.validation)
+        range_check = mommy.make(RangeCheck, auto_process=self.auto_process)
         self.assertEqual(str(range_check), "hello")
 
 
-class RangeCheckPerformTestCase(TestCase):
+class RangeCheckExecuteTestCase(TestCase):
     _index = [
         dt.datetime(2019, 5, 21, 10, 20),
         dt.datetime(2019, 5, 21, 10, 30),
@@ -277,16 +277,16 @@ class RangeCheckPerformTestCase(TestCase):
         index=_index,
     )
 
-    def test_perform(self):
+    def test_execute(self):
         station = mommy.make(Station)
         self.range_check = mommy.make(
             RangeCheck,
             lower_bound=3,
             upper_bound=5,
-            validation__station=station,
-            validation__source_timeseries__gentity=station,
-            validation__target_timeseries__gentity=station,
+            auto_process__station=station,
+            auto_process__source_timeseries__gentity=station,
+            auto_process__target_timeseries__gentity=station,
         )
         htimeseries = HTimeseries(self.source_timeseries)
-        self.range_check.perform(htimeseries)
+        self.range_check.execute(htimeseries)
         pd.testing.assert_frame_equal(self.source_timeseries, self.expected_result)

@@ -2,7 +2,7 @@ from enhydris.celery import app
 
 
 @app.task
-def perform_validation(validation_id):
-    from .models import Validation
+def execute_auto_process(auto_process_id):
+    from .models import AutoProcess
 
-    Validation.objects.get(id=validation_id).perform()
+    AutoProcess.objects.get(id=auto_process_id).execute()

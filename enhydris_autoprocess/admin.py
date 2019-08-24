@@ -8,7 +8,7 @@ from enhydris.models import Timeseries
 from . import models
 
 
-class ValidationFormSet(forms.BaseInlineFormSet):
+class AutoProcessFormSet(forms.BaseInlineFormSet):
     """Formset that passes station to the form.
 
     For an explanation of why we need this formset, see
@@ -21,7 +21,7 @@ class ValidationFormSet(forms.BaseInlineFormSet):
         return kwargs
 
 
-class ValidationForm(forms.ModelForm):
+class AutoProcessForm(forms.ModelForm):
     upper_bound = forms.FloatField(required=True, label=_("Upper bound"))
     lower_bound = forms.FloatField(required=True, label=_("Lower bound"))
 
@@ -37,7 +37,7 @@ class ValidationForm(forms.ModelForm):
             self.fields["lower_bound"].initial = instance.rangecheck.lower_bound
 
     class Meta:
-        model = models.Validation
+        model = models.AutoProcess
         fields = (
             "source_timeseries",
             "target_timeseries",
@@ -50,7 +50,7 @@ class ValidationForm(forms.ModelForm):
         if hasattr(instance, "rangecheck"):
             rangecheck = instance.rangecheck
         else:
-            rangecheck = models.RangeCheck(validation=instance)
+            rangecheck = models.RangeCheck(auto_process=instance)
         rangecheck.upper_bound = self.cleaned_data["upper_bound"]
         rangecheck.lower_bound = self.cleaned_data["lower_bound"]
         if commit:
@@ -58,11 +58,11 @@ class ValidationForm(forms.ModelForm):
         return instance
 
 
-class ValidationInline(InlinePermissionsMixin, admin.TabularInline):
-    model = models.Validation
+class AutoProcessInline(InlinePermissionsMixin, admin.TabularInline):
+    model = models.AutoProcess
     classes = ("collapse",)
-    formset = ValidationFormSet
-    form = ValidationForm
+    formset = AutoProcessFormSet
+    form = AutoProcessForm
 
 
-StationAdmin.inlines.append(ValidationInline)
+StationAdmin.inlines.append(AutoProcessInline)

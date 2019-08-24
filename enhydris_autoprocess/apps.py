@@ -4,12 +4,12 @@ from django.db.models.signals import post_save
 from . import tasks
 
 
-def enqueue_validation(sender, *, instance, **kwargs):
+def enqueue_auto_process(sender, *, instance, **kwargs):
     from enhydris.models import Timeseries
 
     try:
-        tasks.perform_validation.delay(instance.validation.id)
-    except Timeseries.validation.RelatedObjectDoesNotExist:
+        tasks.execute_auto_process.delay(instance.auto_process.id)
+    except Timeseries.auto_process.RelatedObjectDoesNotExist:
         pass
 
 
@@ -17,4 +17,4 @@ class AutoprocessConfig(AppConfig):
     name = "enhydris_autoprocess"
 
     def ready(self):
-        post_save.connect(enqueue_validation, sender="enhydris.Timeseries")
+        post_save.connect(enqueue_auto_process, sender="enhydris.Timeseries")

@@ -116,8 +116,12 @@ class ValidationPerformTestCase(TestCase):
     def setUp(self, m):
         self.mock_perform = m
         station = mommy.make(Station)
-        self.source_timeseries = mommy.make(Timeseries, gentity=station)
-        self.target_timeseries = mommy.make(Timeseries, gentity=station)
+        self.source_timeseries = mommy.make(
+            Timeseries, gentity=station, variable__descr="irrelevant"
+        )
+        self.target_timeseries = mommy.make(
+            Timeseries, gentity=station, variable__descr="irrelevant"
+        )
         self.validation = mommy.make(
             Validation,
             station=station,
@@ -143,7 +147,7 @@ class ValidationPerformDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
         self.mock_perform = m
         station = mommy.make(Station)
         self.source_timeseries = mommy.make(
-            Timeseries, gentity=station, time_zone__utc_offset=0
+            Timeseries, gentity=station, time_zone__utc_offset=0, variable__descr="h"
         )
         self.source_timeseries.set_data(
             pd.DataFrame(
@@ -158,7 +162,7 @@ class ValidationPerformDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
             )
         )
         self.target_timeseries = mommy.make(
-            Timeseries, gentity=station, time_zone__utc_offset=0
+            Timeseries, gentity=station, time_zone__utc_offset=0, variable__descr="h"
         )
         self.target_timeseries.set_data(
             pd.DataFrame(

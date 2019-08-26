@@ -1,6 +1,7 @@
 from django import forms
-from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
+
+import nested_admin
 
 from enhydris.admin.station import InlinePermissionsMixin, StationAdmin
 from enhydris.models import Timeseries
@@ -22,22 +23,17 @@ class AutoProcessFormSet(forms.BaseInlineFormSet):
 
 
 class AutoProcessForm(forms.ModelForm):
-    upper_bound = forms.FloatField(required=True, label=_("Upper bound"))
-    lower_bound = forms.FloatField(required=True, label=_("Lower bound"))
-
     def __init__(self, *args, station, **kwargs):
         super().__init__(*args, **kwargs)
         self.station = station
         t = Timeseries.objects
         self.fields["source_timeseries"].queryset = t.filter(gentity=self.station)
         self.fields["target_timeseries"].queryset = t.filter(gentity=self.station)
-        instance = kwargs.get("instance")
-        if instance is not None and hasattr(instance, "rangecheck"):
-            self.fields["upper_bound"].initial = instance.rangecheck.upper_bound
-            self.fields["lower_bound"].initial = instance.rangecheck.lower_bound
 
+
+class RangeCheckForm(AutoProcessForm):
     class Meta:
-        model = models.AutoProcess
+        model = models.RangeCheck
         fields = (
             "source_timeseries",
             "target_timeseries",
@@ -45,24 +41,37 @@ class AutoProcessForm(forms.ModelForm):
             "upper_bound",
         )
 
-    def save(self, instance=None, commit=True):
-        instance = super().save(commit=commit)
-        if hasattr(instance, "rangecheck"):
-            rangecheck = instance.rangecheck
-        else:
-            rangecheck = models.RangeCheck(auto_process=instance)
-        rangecheck.upper_bound = self.cleaned_data["upper_bound"]
-        rangecheck.lower_bound = self.cleaned_data["lower_bound"]
-        if commit:
-            rangecheck.save()
-        return instance
 
-
-class AutoProcessInline(InlinePermissionsMixin, admin.TabularInline):
-    model = models.AutoProcess
+class RangeCheckInline(InlinePermissionsMixin, nested_admin.NestedTabularInline):
+    model = models.RangeCheck
     classes = ("collapse",)
     formset = AutoProcessFormSet
-    form = AutoProcessForm
+    form = RangeCheckForm
+    verbose_name = _("Range check")
+    verbose_name_plural = _("Range checks")
 
 
-StationAdmin.inlines.append(AutoProcessInline)
+StationAdmin.inlines.append(RangeCheckInline)
+
+
+class CurveInterpolationForm(AutoProcessForm):
+    class Meta:
+        model = models.RangeCheck
+        fields = ("source_timeseries", "target_timeseries")
+
+
+class CurvePointInline(nested_admin.NestedTabularInline):
+    model = models.CurvePoint
+
+
+class CurveInterpolationInline(
+    InlinePermissionsMixin, nested_admin.NestedTabularInline
+):
+    model = models.CurveInterpolation
+    classes = ("collapse",)
+    formset = AutoProcessFormSet
+    form = CurveInterpolationForm
+    inlines = [CurvePointInline]
+
+
+StationAdmin.inlines.append(CurveInterpolationInline)

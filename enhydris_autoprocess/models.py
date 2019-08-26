@@ -23,15 +23,15 @@ class AutoProcess(models.Model):
     class Meta:
         verbose_name_plural = _("Auto processes")
 
-    def __str__(self):
-        return str(self.source_timeseries)
-
     def execute(self):
-        timeseries = self.source_timeseries.get_data(start_date=self._get_start_date())
-        for check in ["rangecheck"]:
-            if hasattr(self, check):
-                getattr(self, check).execute(timeseries)
-        self.target_timeseries.append_data(timeseries)
+        htimeseries = self.source_timeseries.get_data(start_date=self._get_start_date())
+        result = self.process_timeseries(htimeseries)
+        self.target_timeseries.append_data(result)
+
+    def process_timeseries(self, htimeseries):
+        for alternative in ("rangecheck", "curveinterpolation"):
+            if hasattr(self, alternative):
+                return getattr(self, alternative).process_timeseries(htimeseries)
 
     def _get_start_date(self):
         start_date = self.target_timeseries.end_date
@@ -42,7 +42,11 @@ class AutoProcess(models.Model):
     def save(self, *args, **kwargs):
         self._check_integrity()
         result = super().save(*args, **kwargs)
-        tasks.execute_auto_process.delay(self.id)
+
+        # We delay running the task by one second; otherwise it may run before the
+        # current transaction has been committed.
+        tasks.execute_auto_process.apply_async(args=[self.id], countdown=1)
+
         return result
 
     def _check_integrity(self):
@@ -56,15 +60,14 @@ class AutoProcess(models.Model):
             )
 
 
-class RangeCheck(models.Model):
-    auto_process = models.OneToOneField(AutoProcess, on_delete=models.CASCADE)
+class RangeCheck(AutoProcess):
     upper_bound = models.FloatField()
     lower_bound = models.FloatField()
 
     def __str__(self):
-        return str(self.auto_process)
+        return _("Range check for {}").format(str(self.source_timeseries))
 
-    def execute(self, ahtimeseries):
+    def process_timeseries(self, ahtimeseries):
         timeseries = ahtimeseries.data
         out_of_bounds_mask = ~pd.isnull(timeseries["value"]) & ~timeseries[
             "value"
@@ -80,4 +83,42 @@ class RangeCheck(models.Model):
         timeseries.loc[out_of_bounds_with_no_flags_mask, "flags"] = "RANGE"
         timeseries.loc[out_of_bounds_with_flags_mask, "flags"] = (
             timeseries.loc[out_of_bounds_with_flags_mask, "flags"] + " RANGE"
+        )
+        return timeseries
+
+
+class CurveInterpolation(AutoProcess):
+    name = models.CharField(max_length=200)
+
+    def __str__(self):
+        return self.name
+
+    def process_timeseries(self, ahtimeseries):
+        timeseries = ahtimeseries.data
+        x, y = self._get_curve()
+        values_array = ahtimeseries.data["value"].values
+        new_array = np.interp(values_array, x, y)
+        timeseries["value"] = new_array
+        timeseries["flags"] = ""
+        return timeseries
+
+    def _get_curve(self):
+        x = []
+        y = []
+        for point in self.curvepoint_set.order_by("x"):
+            x.append(point.x)
+            y.append(point.y)
+        return x, y
+
+
+class CurvePoint(models.Model):
+    curve_interpolation = models.ForeignKey(
+        CurveInterpolation, on_delete=models.CASCADE
+    )
+    x = models.FloatField()
+    y = models.FloatField()
+
+    def __str__(self):
+        return _("{}: Point ({}, {})").format(
+            str(self.curve_interpolation), self.x, self.y
         )

@@ -1,4 +1,6 @@
+import csv
 import datetime as dt
+from io import StringIO
 
 from django.db import IntegrityError, models
 from django.utils.translation import gettext_lazy as _
@@ -109,6 +111,18 @@ class CurveInterpolation(AutoProcess):
             x.append(point.x)
             y.append(point.y)
         return x, y
+
+    def set_curve(self, s):
+        """Replaces all existing points with ones read from a string.
+
+        The string can be comma-delimited or tab-delimited, or a mix.
+        """
+
+        s = s.replace("\t", ",")
+        self.curvepoint_set.all().delete()
+        for row in csv.reader(StringIO(s)):
+            x, y = [float(item) for item in row[:2]]
+            CurvePoint.objects.create(curve_interpolation=self, x=x, y=y)
 
 
 class CurvePoint(models.Model):

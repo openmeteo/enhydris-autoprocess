@@ -1,4 +1,5 @@
 import datetime as dt
+import textwrap
 from unittest import mock
 
 from django.db import IntegrityError
@@ -385,6 +386,37 @@ class CurvePointTestCase(TestCase):
             CurvePoint, curve_interpolation=self.curve_interpolation, x=2.178, y=3.141
         )
         self.assertEqual(str(point), "Stage-discharge: Point (2.178, 3.141)")
+
+
+class CurveInterpolationSetCurveTestCase(TestCase):
+    def setUp(self):
+        station = mommy.make(Station)
+        self.ci = mommy.make(
+            CurveInterpolation,
+            station=station,
+            source_timeseries__gentity=station,
+            target_timeseries__gentity=station,
+            name="Stage-discharge",
+        )
+        point = CurvePoint(curve_interpolation=self.ci, x=2.718, y=3.141)
+        point.save()
+
+    def test_set_curve(self):
+        csv = textwrap.dedent(
+            """\
+            5,6
+            7\t8
+            9,10
+            """
+        )
+        self.ci.set_curve(csv)
+        points = CurvePoint.objects.filter(curve_interpolation=self.ci).order_by("x")
+        self.assertAlmostEqual(points[0].x, 5)
+        self.assertAlmostEqual(points[0].y, 6)
+        self.assertAlmostEqual(points[1].x, 7)
+        self.assertAlmostEqual(points[1].y, 8)
+        self.assertAlmostEqual(points[2].x, 9)
+        self.assertAlmostEqual(points[2].y, 10)
 
 
 class CurveInterpolationProcessTimeseriesTestCase(TestCase):

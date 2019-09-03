@@ -489,7 +489,7 @@ class CurveInterpolationProcessTimeseriesTestCase(TestCase):
 
     expected_result = pd.DataFrame(
         data={
-            "value": [100, 105, np.nan, 210, 345, 350],
+            "value": [np.nan, 105, np.nan, 210, 345, np.nan],
             "flags": ["", "", "", "", "", ""],
         },
         columns=["value", "flags"],

@@ -16,6 +16,7 @@ from enhydris_autoprocess import tasks
 from enhydris_autoprocess.models import (
     AutoProcess,
     CurveInterpolation,
+    CurvePeriod,
     CurvePoint,
     RangeCheck,
 )
@@ -350,7 +351,7 @@ class CurveInterpolationTestCase(TestCase):
         self.assertEqual(str(curve_interpolation), "Stage-discharge")
 
 
-class CurvePointTestCase(TestCase):
+class CurvePeriodTestCase(TestCase):
     def setUp(self):
         station = mommy.make(Station)
         self.curve_interpolation = mommy.make(
@@ -362,43 +363,91 @@ class CurvePointTestCase(TestCase):
         )
 
     def test_create(self):
-        point = CurvePoint(
-            curve_interpolation=self.curve_interpolation, x=2.718, y=3.141
+        curve_period = CurvePeriod(
+            curve_interpolation=self.curve_interpolation,
+            start_date=dt.date(2019, 9, 3),
+            end_date=dt.date(2021, 9, 4),
         )
+        curve_period.save()
+        self.assertEqual(CurvePeriod.objects.count(), 1)
+
+    def test_update(self):
+        mommy.make(CurvePeriod, curve_interpolation=self.curve_interpolation)
+        curve_period = CurvePeriod.objects.first()
+        curve_period.start_date = dt.date(1963, 1, 1)
+        curve_period.end_date = dt.date(1963, 12, 1)
+        curve_period.save()
+        curve_period = CurvePeriod.objects.first()
+        self.assertEqual(curve_period.start_date, dt.date(1963, 1, 1))
+
+    def test_delete(self):
+        mommy.make(CurvePeriod, curve_interpolation=self.curve_interpolation)
+        curve_period = CurvePeriod.objects.first()
+        curve_period.delete()
+        self.assertEqual(CurvePeriod.objects.count(), 0)
+
+    def test_str(self):
+        curve_period = mommy.make(
+            CurvePeriod,
+            curve_interpolation=self.curve_interpolation,
+            start_date=dt.date(2019, 9, 3),
+            end_date=dt.date(2021, 9, 4),
+        )
+        self.assertEqual(str(curve_period), "Stage-discharge: 2019-09-03 - 2021-09-04")
+
+
+class CurvePointTestCase(TestCase):
+    def setUp(self):
+        station = mommy.make(Station)
+        self.curve_period = mommy.make(
+            CurvePeriod,
+            curve_interpolation__station=station,
+            curve_interpolation__source_timeseries__gentity=station,
+            curve_interpolation__target_timeseries__gentity=station,
+            curve_interpolation__name="Stage-discharge",
+            start_date=dt.date(2019, 9, 3),
+            end_date=dt.date(2021, 9, 4),
+        )
+
+    def test_create(self):
+        point = CurvePoint(curve_period=self.curve_period, x=2.718, y=3.141)
         point.save()
         self.assertEqual(CurvePoint.objects.count(), 1)
 
     def test_update(self):
-        mommy.make(CurvePoint, curve_interpolation=self.curve_interpolation)
+        mommy.make(CurvePoint, curve_period=self.curve_period)
         point = CurvePoint.objects.first()
         point.x = 2.718
         point.save()
+        point = CurvePoint.objects.first()
         self.assertAlmostEqual(point.x, 2.718)
 
     def test_delete(self):
-        mommy.make(CurvePoint, curve_interpolation=self.curve_interpolation)
+        mommy.make(CurvePoint, curve_period=self.curve_period)
         point = CurvePoint.objects.first()
         point.delete()
         self.assertEqual(CurvePoint.objects.count(), 0)
 
     def test_str(self):
-        point = mommy.make(
-            CurvePoint, curve_interpolation=self.curve_interpolation, x=2.178, y=3.141
+        point = mommy.make(CurvePoint, curve_period=self.curve_period, x=2.178, y=3.141)
+        self.assertEqual(
+            str(point), "Stage-discharge: 2019-09-03 - 2021-09-04: Point (2.178, 3.141)"
         )
-        self.assertEqual(str(point), "Stage-discharge: Point (2.178, 3.141)")
 
 
-class CurveInterpolationSetCurveTestCase(TestCase):
+class CurvePeriodSetCurveTestCase(TestCase):
     def setUp(self):
         station = mommy.make(Station)
-        self.ci = mommy.make(
-            CurveInterpolation,
-            station=station,
-            source_timeseries__gentity=station,
-            target_timeseries__gentity=station,
-            name="Stage-discharge",
+        self.period = mommy.make(
+            CurvePeriod,
+            curve_interpolation__station=station,
+            curve_interpolation__source_timeseries__gentity=station,
+            curve_interpolation__target_timeseries__gentity=station,
+            curve_interpolation__name="Stage-discharge",
+            start_date=dt.date(2019, 9, 3),
+            end_date=dt.date(2021, 9, 4),
         )
-        point = CurvePoint(curve_interpolation=self.ci, x=2.718, y=3.141)
+        point = CurvePoint(curve_period=self.period, x=2.718, y=3.141)
         point.save()
 
     def test_set_curve(self):
@@ -409,8 +458,8 @@ class CurveInterpolationSetCurveTestCase(TestCase):
             9,10
             """
         )
-        self.ci.set_curve(csv)
-        points = CurvePoint.objects.filter(curve_interpolation=self.ci).order_by("x")
+        self.period.set_curve(csv)
+        points = CurvePoint.objects.filter(curve_period=self.period).order_by("x")
         self.assertAlmostEqual(points[0].x, 5)
         self.assertAlmostEqual(points[0].y, 6)
         self.assertAlmostEqual(points[1].x, 7)
@@ -424,36 +473,60 @@ class CurveInterpolationProcessTimeseriesTestCase(TestCase):
         dt.datetime(2019, 5, 21, 10, 20),
         dt.datetime(2019, 5, 21, 10, 30),
         dt.datetime(2019, 5, 21, 10, 40),
-        dt.datetime(2019, 5, 21, 10, 50),
-        dt.datetime(2019, 5, 21, 11, 00),
+        dt.datetime(2019, 6, 21, 10, 50),
+        dt.datetime(2019, 6, 21, 11, 00),
+        dt.datetime(2019, 6, 21, 11, 10),
     ]
 
     source_timeseries = pd.DataFrame(
         data={
-            "value": [2.9, 3.1, np.nan, 4.9, 7.2],
-            "flags": ["", "", "", "FLAG1", "FLAG2"],
+            "value": [2.9, 3.1, np.nan, 3.1, 4.9, 7.2],
+            "flags": ["", "", "", "", "FLAG1", "FLAG2"],
         },
         columns=["value", "flags"],
         index=_index,
     )
 
     expected_result = pd.DataFrame(
-        data={"value": [100, 105, np.nan, 172.5, 175], "flags": ["", "", "", "", ""]},
+        data={
+            "value": [100, 105, np.nan, 210, 345, 350],
+            "flags": ["", "", "", "", "", ""],
+        },
         columns=["value", "flags"],
         index=_index,
     )
 
     def test_execute(self):
         station = mommy.make(Station)
-        ci = mommy.make(
+        self.curve_interpolation = mommy.make(
             CurveInterpolation,
             station=station,
             source_timeseries__gentity=station,
             target_timeseries__gentity=station,
+            name="Stage-discharge",
         )
-        mommy.make(CurvePoint, curve_interpolation=ci, x=3, y=100)
-        mommy.make(CurvePoint, curve_interpolation=ci, x=4, y=150)
-        mommy.make(CurvePoint, curve_interpolation=ci, x=5, y=175)
+        self._setup_period1()
+        self._setup_period2()
         htimeseries = HTimeseries(self.source_timeseries)
-        result = ci.process_timeseries(htimeseries)
+        result = self.curve_interpolation.process_timeseries(htimeseries)
         pd.testing.assert_frame_equal(result, self.expected_result)
+
+    def _setup_period1(self):
+        period1 = self._make_period(dt.date(2019, 5, 1), dt.date(2019, 5, 31))
+        mommy.make(CurvePoint, curve_period=period1, x=3, y=100)
+        mommy.make(CurvePoint, curve_period=period1, x=4, y=150)
+        mommy.make(CurvePoint, curve_period=period1, x=5, y=175)
+
+    def _setup_period2(self):
+        period1 = self._make_period(dt.date(2019, 6, 1), dt.date(2019, 6, 30))
+        mommy.make(CurvePoint, curve_period=period1, x=3, y=200)
+        mommy.make(CurvePoint, curve_period=period1, x=4, y=300)
+        mommy.make(CurvePoint, curve_period=period1, x=5, y=350)
+
+    def _make_period(self, start_date, end_date):
+        return mommy.make(
+            CurvePeriod,
+            curve_interpolation=self.curve_interpolation,
+            start_date=start_date,
+            end_date=end_date,
+        )

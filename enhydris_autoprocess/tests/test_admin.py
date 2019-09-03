@@ -1,13 +1,15 @@
+import datetime as dt
+
 from django.test import TestCase
 
 from model_mommy import mommy
 
 from enhydris.models import Station
-from enhydris_autoprocess.admin import CurveInterpolationForm
-from enhydris_autoprocess.models import CurveInterpolation, CurvePoint
+from enhydris_autoprocess.admin import CurvePeriodForm
+from enhydris_autoprocess.models import CurveInterpolation, CurvePeriod, CurvePoint
 
 
-class CurveInterpolationFormTestCase(TestCase):
+class CurvePeriodFormTestCase(TestCase):
     def setUp(self):
         self.station = mommy.make(Station)
         self.ci = mommy.make(
@@ -17,41 +19,48 @@ class CurveInterpolationFormTestCase(TestCase):
             target_timeseries__gentity=self.station,
             name="Stage-discharge",
         )
-        point = CurvePoint(curve_interpolation=self.ci, x=2.718, y=3.141)
+        self.period = mommy.make(
+            CurvePeriod,
+            curve_interpolation=self.ci,
+            start_date=dt.date(1980, 1, 1),
+            end_date=dt.date(1985, 6, 30),
+        )
+        point = CurvePoint(curve_period=self.period, x=2.718, y=3.141)
         point.save()
-        point = CurvePoint(curve_interpolation=self.ci, x=4, y=5)
+        point = CurvePoint(curve_period=self.period, x=4, y=5)
         point.save()
 
     def test_init(self):
-        form = CurveInterpolationForm(instance=self.ci, station=self.station)
+        form = CurvePeriodForm(instance=self.period)
         content = form.as_p()
         self.assertTrue("2.718\t3.141\n4.0\t5.0" in content)
 
     def test_save(self):
-        form = CurveInterpolationForm(
+        form = CurvePeriodForm(
             {
-                "source_timeseries": self.ci.source_timeseries.id,
-                "target_timeseries": self.ci.target_timeseries.id,
+                "start_date": dt.date(2019, 9, 3),
+                "end_date": dt.date(2021, 9, 3),
                 "points": "1\t2",
             },
-            instance=self.ci,
-            station=self.station,
+            instance=self.period,
         )
         self.assertTrue(form.is_valid())
         form.save()
-        point = CurvePoint.objects.get(curve_interpolation=self.ci)
+        point = CurvePoint.objects.get(curve_period=self.period)
+        period = CurvePeriod.objects.get(curve_interpolation=self.ci)
+        self.assertEqual(period.start_date, dt.date(2019, 9, 3))
+        self.assertEqual(period.end_date, dt.date(2021, 9, 3))
         self.assertAlmostEqual(point.x, 1)
         self.assertAlmostEqual(point.y, 2)
 
     def test_validate(self):
-        form = CurveInterpolationForm(
+        form = CurvePeriodForm(
             {
-                "source_timeseries": self.ci.source_timeseries.id,
-                "target_timeseries": self.ci.target_timeseries.id,
+                "start_date": dt.date(2019, 9, 3),
+                "end_date": dt.date(2021, 9, 3),
                 "points": "garbage",
             },
-            instance=self.ci,
-            station=self.station,
+            instance=self.period,
         )
         self.assertFalse(form.is_valid())
         self.assertEqual(

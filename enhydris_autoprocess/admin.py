@@ -9,7 +9,7 @@ import nested_admin
 from enhydris.admin.station import InlinePermissionsMixin, StationAdmin
 from enhydris.models import Timeseries
 
-from .models import CurveInterpolation, RangeCheck
+from .models import CurveInterpolation, CurvePeriod, RangeCheck
 
 
 class AutoProcessFormSet(forms.BaseInlineFormSet):
@@ -57,7 +57,7 @@ class RangeCheckInline(InlinePermissionsMixin, nested_admin.NestedTabularInline)
 StationAdmin.inlines.append(RangeCheckInline)
 
 
-class CurveInterpolationForm(AutoProcessForm):
+class CurvePeriodForm(forms.ModelForm):
     points = forms.CharField(
         widget=forms.Textarea,
         help_text=(
@@ -69,8 +69,8 @@ class CurveInterpolationForm(AutoProcessForm):
     )
 
     class Meta:
-        model = RangeCheck
-        fields = ("source_timeseries", "target_timeseries")
+        model = CurvePeriod
+        fields = ("start_date", "end_date", "points")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -99,6 +99,19 @@ class CurveInterpolationForm(AutoProcessForm):
         return result
 
 
+class CurvePeriodInline(nested_admin.NestedTabularInline):
+    model = CurvePeriod
+    form = CurvePeriodForm
+    points = models.CharField()
+    extra = 1
+
+
+class CurveInterpolationForm(AutoProcessForm):
+    class Meta:
+        model = CurveInterpolation
+        fields = ("source_timeseries", "target_timeseries")
+
+
 class CurveInterpolationInline(
     InlinePermissionsMixin, nested_admin.NestedTabularInline
 ):
@@ -106,7 +119,8 @@ class CurveInterpolationInline(
     classes = ("collapse",)
     formset = AutoProcessFormSet
     form = CurveInterpolationForm
-    points = models.CharField()
+    inlines = [CurvePeriodInline]
+    extra = 1
 
 
 StationAdmin.inlines.append(CurveInterpolationInline)

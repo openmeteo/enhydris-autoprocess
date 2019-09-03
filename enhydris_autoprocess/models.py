@@ -97,17 +97,32 @@ class CurveInterpolation(AutoProcess):
 
     def process_timeseries(self, ahtimeseries):
         timeseries = ahtimeseries.data
-        x, y = self._get_curve()
-        values_array = ahtimeseries.data["value"].values
-        new_array = np.interp(values_array, x, y)
-        timeseries["value"] = new_array
-        timeseries["flags"] = ""
+        for period in self.curveperiod_set.order_by("start_date"):
+            x, y = period._get_curve()
+            start, end = period.start_date, period.end_date
+            values_array = timeseries.loc[start:end, "value"].values
+            new_array = np.interp(values_array, x, y)
+            timeseries.loc[start:end, "value"] = new_array
+            timeseries.loc[start:end, "flags"] = ""
         return timeseries
+
+
+class CurvePeriod(models.Model):
+    curve_interpolation = models.ForeignKey(
+        CurveInterpolation, on_delete=models.CASCADE
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+
+    def __str__(self):
+        return "{}: {} - {}".format(
+            str(self.curve_interpolation), self.start_date, self.end_date
+        )
 
     def _get_curve(self):
         x = []
         y = []
-        for point in self.curvepoint_set.order_by("x"):
+        for point in self.curvepoint_set.filter(curve_period=self).order_by("x"):
             x.append(point.x)
             y.append(point.y)
         return x, y
@@ -122,17 +137,13 @@ class CurveInterpolation(AutoProcess):
         self.curvepoint_set.all().delete()
         for row in csv.reader(StringIO(s)):
             x, y = [float(item) for item in row[:2]]
-            CurvePoint.objects.create(curve_interpolation=self, x=x, y=y)
+            CurvePoint.objects.create(curve_period=self, x=x, y=y)
 
 
 class CurvePoint(models.Model):
-    curve_interpolation = models.ForeignKey(
-        CurveInterpolation, on_delete=models.CASCADE
-    )
+    curve_period = models.ForeignKey(CurvePeriod, on_delete=models.CASCADE)
     x = models.FloatField()
     y = models.FloatField()
 
     def __str__(self):
-        return _("{}: Point ({}, {})").format(
-            str(self.curve_interpolation), self.x, self.y
-        )
+        return _("{}: Point ({}, {})").format(str(self.curve_period), self.x, self.y)

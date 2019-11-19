@@ -109,7 +109,8 @@ class AutoProcessTestCase(TestCase):
 class AutoProcessExecuteTestCase(TestCase):
     @mock.patch(
         "enhydris_autoprocess.models.RangeCheck.process_timeseries",
-        side_effect=lambda x: x,
+        side_effect=lambda self: self.htimeseries,
+        autospec=True,
     )
     def setUp(self, m):
         self.mock_execute = m
@@ -132,19 +133,18 @@ class AutoProcessExecuteTestCase(TestCase):
         self.assertEqual(len(self.mock_execute.mock_calls), 1)
 
     def test_called_with_empty_content(self):
-        args = self.mock_execute.mock_calls[0][1]
-        ahtimeseries = args[0]
-        self.assertEqual(len(ahtimeseries.data), 0)
+        self.assertEqual(len(self.range_check.htimeseries.data), 0)
 
 
 @RandomEnhydrisTimeseriesDataDir()
 class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
     @mock.patch(
         "enhydris_autoprocess.models.RangeCheck.process_timeseries",
-        side_effect=lambda x: x,
+        side_effect=lambda self: self.htimeseries,
+        autospec=True,
     )
     def setUp(self, m):
-        self.mock_execute = m
+        self.mock_process_timeseries = m
         station = mommy.make(Station)
         self.source_timeseries = mommy.make(
             Timeseries, gentity=station, time_zone__utc_offset=0, variable__descr="h"
@@ -183,18 +183,16 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
         self.range_check.execute()
 
     def test_called_once(self):
-        self.assertEqual(len(self.mock_execute.mock_calls), 1)
+        self.assertEqual(len(self.mock_process_timeseries.mock_calls), 1)
 
     def test_called_with_the_newer_part_of_the_timeseries(self):
-        args = self.mock_execute.mock_calls[0][1]
-        ahtimeseries = args[0]
         expected_arg = pd.DataFrame(
             data={"value": [3.0, 4.0], "flags": ["", ""]},
             columns=["value", "flags"],
             index=[dt.datetime(2019, 5, 21, 17, 20), dt.datetime(2019, 5, 21, 17, 30)],
         )
         expected_arg.index.name = "date"
-        pd.testing.assert_frame_equal(ahtimeseries.data, expected_arg)
+        pd.testing.assert_frame_equal(self.range_check.htimeseries.data, expected_arg)
 
     def test_appended_the_data(self):
         expected_result = pd.DataFrame(
@@ -296,8 +294,8 @@ class RangeCheckProcessTimeseriesTestCase(TestCase):
             source_timeseries__gentity=station,
             target_timeseries__gentity=station,
         )
-        htimeseries = HTimeseries(self.source_timeseries)
-        result = self.range_check.process_timeseries(htimeseries)
+        self.range_check.htimeseries = HTimeseries(self.source_timeseries)
+        result = self.range_check.process_timeseries()
         pd.testing.assert_frame_equal(result, self.expected_result)
 
 
@@ -507,8 +505,8 @@ class CurveInterpolationProcessTimeseriesTestCase(TestCase):
         )
         self._setup_period1()
         self._setup_period2()
-        htimeseries = HTimeseries(self.source_timeseries)
-        result = self.curve_interpolation.process_timeseries(htimeseries)
+        self.curve_interpolation.htimeseries = HTimeseries(self.source_timeseries)
+        result = self.curve_interpolation.process_timeseries()
         pd.testing.assert_frame_equal(result, self.expected_result)
 
     def _setup_period1(self):

@@ -26,14 +26,16 @@ class AutoProcess(models.Model):
         verbose_name_plural = _("Auto processes")
 
     def execute(self):
-        htimeseries = self.source_timeseries.get_data(start_date=self._get_start_date())
-        result = self.process_timeseries(htimeseries)
+        self.htimeseries = self.source_timeseries.get_data(
+            start_date=self._get_start_date()
+        )
+        result = self.process_timeseries()
         self.target_timeseries.append_data(result)
 
-    def process_timeseries(self, htimeseries):
+    def process_timeseries(self):
         for alternative in ("rangecheck", "curveinterpolation"):
             if hasattr(self, alternative):
-                return getattr(self, alternative).process_timeseries(htimeseries)
+                return getattr(self, alternative).process_timeseries()
 
     def _get_start_date(self):
         start_date = self.target_timeseries.end_date
@@ -69,24 +71,27 @@ class RangeCheck(AutoProcess):
     def __str__(self):
         return _("Range check for {}").format(str(self.source_timeseries))
 
-    def process_timeseries(self, ahtimeseries):
-        timeseries = ahtimeseries.data
-        out_of_bounds_mask = ~pd.isnull(timeseries["value"]) & ~timeseries[
+    def process_timeseries(self):
+        self._find_out_of_bounds_values()
+        self._replace_out_of_bounds_values_with_nan()
+        self._add_range_flag_to_out_of_bounds_values()
+        return self.htimeseries.data
+
+    def _find_out_of_bounds_values(self):
+        timeseries = self.htimeseries.data
+        self.out_of_bounds_mask = ~pd.isnull(timeseries["value"]) & ~timeseries[
             "value"
         ].between(self.lower_bound, self.upper_bound)
-        timeseries.loc[out_of_bounds_mask, "value"] = np.nan
 
-        out_of_bounds_with_no_flags_mask = out_of_bounds_mask & (
-            timeseries["flags"] == ""
-        )
-        out_of_bounds_with_flags_mask = (
-            out_of_bounds_mask & ~out_of_bounds_with_no_flags_mask
-        )
-        timeseries.loc[out_of_bounds_with_no_flags_mask, "flags"] = "RANGE"
-        timeseries.loc[out_of_bounds_with_flags_mask, "flags"] = (
-            timeseries.loc[out_of_bounds_with_flags_mask, "flags"] + " RANGE"
-        )
-        return timeseries
+    def _replace_out_of_bounds_values_with_nan(self):
+        self.htimeseries.data.loc[self.out_of_bounds_mask, "value"] = np.nan
+
+    def _add_range_flag_to_out_of_bounds_values(self):
+        d = self.htimeseries.data
+        out_of_bounds_with_flags_mask = self.out_of_bounds_mask & (d["flags"] != "")
+        d.loc[out_of_bounds_with_flags_mask] += " "
+        d.loc[self.out_of_bounds_mask] += "RANGE"
+        return d
 
 
 class CurveInterpolation(AutoProcess):
@@ -95,8 +100,8 @@ class CurveInterpolation(AutoProcess):
     def __str__(self):
         return self.name
 
-    def process_timeseries(self, ahtimeseries):
-        timeseries = ahtimeseries.data
+    def process_timeseries(self):
+        timeseries = self.htimeseries.data
         for period in self.curveperiod_set.order_by("start_date"):
             x, y = period._get_curve()
             start, end = period.start_date, period.end_date

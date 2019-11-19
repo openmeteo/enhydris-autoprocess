@@ -264,12 +264,14 @@ class RangeCheckProcessTimeseriesTestCase(TestCase):
         dt.datetime(2019, 5, 21, 10, 40),
         dt.datetime(2019, 5, 21, 10, 50),
         dt.datetime(2019, 5, 21, 11, 00),
+        dt.datetime(2019, 5, 21, 11, 10),
+        dt.datetime(2019, 5, 21, 11, 20),
     ]
 
     source_timeseries = pd.DataFrame(
         data={
-            "value": [2.9, 3.1, np.nan, 4.9, 7.2],
-            "flags": ["", "", "", "FLAG1", "FLAG2"],
+            "value": [1.5, 2.9, 3.1, np.nan, 3.8, 4.9, 7.2],
+            "flags": ["", "", "", "", "FLAG1", "FLAG2", "FLAG3"],
         },
         columns=["value", "flags"],
         index=_index,
@@ -277,8 +279,16 @@ class RangeCheckProcessTimeseriesTestCase(TestCase):
 
     expected_result = pd.DataFrame(
         data={
-            "value": [np.nan, 3.1, np.nan, 4.9, np.nan],
-            "flags": ["RANGE", "", "", "FLAG1", "FLAG2 RANGE"],
+            "value": [np.nan, 2.9, 3.1, np.nan, 3.8, 4.9, np.nan],
+            "flags": [
+                "RANGE",
+                "SUSPECT",
+                "",
+                "",
+                "FLAG1",
+                "FLAG2 SUSPECT",
+                "FLAG3 RANGE",
+            ],
         },
         columns=["value", "flags"],
         index=_index,
@@ -288,8 +298,10 @@ class RangeCheckProcessTimeseriesTestCase(TestCase):
         station = mommy.make(Station)
         self.range_check = mommy.make(
             RangeCheck,
-            lower_bound=3,
+            lower_bound=2,
             upper_bound=5,
+            soft_lower_bound=3,
+            soft_upper_bound=4,
             station=station,
             source_timeseries__gentity=station,
             target_timeseries__gentity=station,

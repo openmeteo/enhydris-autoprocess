@@ -42,6 +42,8 @@ class RangeCheckForm(AutoProcessForm):
             "target_timeseries",
             "lower_bound",
             "upper_bound",
+            "soft_lower_bound",
+            "soft_upper_bound",
         )
 
 

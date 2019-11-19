@@ -67,30 +67,41 @@ class AutoProcess(models.Model):
 class RangeCheck(AutoProcess):
     upper_bound = models.FloatField()
     lower_bound = models.FloatField()
+    soft_upper_bound = models.FloatField(blank=True, null=True)
+    soft_lower_bound = models.FloatField(blank=True, null=True)
 
     def __str__(self):
         return _("Range check for {}").format(str(self.source_timeseries))
 
     def process_timeseries(self):
-        self._find_out_of_bounds_values()
-        self._replace_out_of_bounds_values_with_nan()
-        self._add_range_flag_to_out_of_bounds_values()
+        self._do_hard_limits()
+        self._do_soft_limits()
         return self.htimeseries.data
 
-    def _find_out_of_bounds_values(self):
+    def _do_hard_limits(self):
+        self._find_out_of_bounds_values(self.lower_bound, self.upper_bound)
+        self._replace_out_of_bounds_values_with_nan()
+        self._add_flag_to_out_of_bounds_values("RANGE")
+        return self.htimeseries.data
+
+    def _do_soft_limits(self):
+        self._find_out_of_bounds_values(self.soft_lower_bound, self.soft_upper_bound)
+        self._add_flag_to_out_of_bounds_values("SUSPECT")
+
+    def _find_out_of_bounds_values(self, low, high):
         timeseries = self.htimeseries.data
         self.out_of_bounds_mask = ~pd.isnull(timeseries["value"]) & ~timeseries[
             "value"
-        ].between(self.lower_bound, self.upper_bound)
+        ].between(low, high)
 
     def _replace_out_of_bounds_values_with_nan(self):
         self.htimeseries.data.loc[self.out_of_bounds_mask, "value"] = np.nan
 
-    def _add_range_flag_to_out_of_bounds_values(self):
+    def _add_flag_to_out_of_bounds_values(self, flag):
         d = self.htimeseries.data
         out_of_bounds_with_flags_mask = self.out_of_bounds_mask & (d["flags"] != "")
-        d.loc[out_of_bounds_with_flags_mask] += " "
-        d.loc[self.out_of_bounds_mask] += "RANGE"
+        d.loc[out_of_bounds_with_flags_mask, "flags"] += " "
+        d.loc[self.out_of_bounds_mask, "flags"] += flag
         return d
 
 

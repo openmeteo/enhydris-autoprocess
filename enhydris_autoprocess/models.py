@@ -35,7 +35,9 @@ class AutoProcess(models.Model):
     def process_timeseries(self):
         for alternative in ("rangecheck", "curveinterpolation"):
             if hasattr(self, alternative):
-                return getattr(self, alternative).process_timeseries()
+                childobj = getattr(self, alternative)
+                childobj.htimeseries = self.htimeseries
+                return childobj.process_timeseries()
 
     def _get_start_date(self):
         start_date = self.target_timeseries.end_date

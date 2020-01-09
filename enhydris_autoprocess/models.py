@@ -1,5 +1,6 @@
 import csv
 import datetime as dt
+import re
 from io import StringIO
 
 from django.db import IntegrityError, models
@@ -7,6 +8,7 @@ from django.utils.translation import gettext_lazy as _
 
 import numpy as np
 import pandas as pd
+from haggregate import aggregate, regularize
 
 from enhydris.models import Station, Timeseries
 
@@ -33,7 +35,7 @@ class AutoProcess(models.Model):
         self.target_timeseries.append_data(result)
 
     def process_timeseries(self):
-        for alternative in ("rangecheck", "curveinterpolation"):
+        for alternative in ("rangecheck", "curveinterpolation", "aggregation"):
             if hasattr(self, alternative):
                 childobj = getattr(self, alternative)
                 childobj.htimeseries = self.htimeseries
@@ -165,3 +167,81 @@ class CurvePoint(models.Model):
 
     def __str__(self):
         return _("{}: Point ({}, {})").format(str(self.curve_period), self.x, self.y)
+
+
+class Aggregation(AutoProcess):
+    METHOD_CHOICES = [
+        ("sum", "Sum"),
+        ("mean", "Mean"),
+        ("max", "Max"),
+        ("min", "Min"),
+    ]
+    method = models.CharField(max_length=4, choices=METHOD_CHOICES)
+    resulting_timestamp_offset = models.CharField(
+        max_length=7,
+        blank=True,
+        help_text=(
+            'If the time step of the target time series is one day ("D") and you set '
+            'the resulting timestamp offset to "1min", the resulting time stamps will '
+            "be ending in 23:59.  This does not modify the calculations; it only "
+            "subtracts the specified offset from the timestamp after the calculations "
+            "have finished. Leave empty to leave the timestamps alone."
+        ),
+    )
+
+    def __str__(self):
+        return _("Aggregation for {}").format(str(self.source_timeseries))
+
+    def save(self, force_insert=False, force_update=False, *args, **kwargs):
+        self._check_resulting_timestamp_offset()
+        super().save(force_insert, force_update, *args, **kwargs)
+
+    def _check_resulting_timestamp_offset(self):
+        if not self.resulting_timestamp_offset:
+            return
+        else:
+            self._check_nonempty_resulting_timestamp_offset()
+
+    def _check_nonempty_resulting_timestamp_offset(self):
+        m = re.match(r"(-?)(\d*)(.*)$", self.resulting_timestamp_offset)
+        sign, number, unit = m.group(1, 2, 3)
+        if unit != "min" or (sign == "-" and number == ""):
+            raise IntegrityError(
+                '"{}" is not a valid resulting time step offset.'.format(
+                    self.resulting_timestamp_offset
+                )
+            )
+
+    def process_timeseries(self):
+        self._regularize_time_series()
+        self._aggregate_time_series()
+        return self.htimeseries
+
+    def _regularize_time_series(self):
+        self.htimeseries = regularize(self.htimeseries, new_date_flag="DATEINSERT")
+
+    def _aggregate_time_series(self):
+        source_step = self._get_source_step()
+        target_step = self._get_target_step()
+        min_count = self._divide_target_step_by_source_step(source_step, target_step)
+        self.htimeseries = aggregate(
+            self.htimeseries,
+            target_step,
+            self.method,
+            min_count=min_count,
+            target_timestamp_offset=self.resulting_timestamp_offset or None,
+        )
+
+    def _get_source_step(self):
+        return pd.infer_freq(self.htimeseries.data.index)
+
+    def _get_target_step(self):
+        result = self.target_timeseries.time_step
+        if not result[0].isdigit():
+            result = "1" + result
+        return result
+
+    def _divide_target_step_by_source_step(self, source_step, target_step):
+        return int(
+            pd.Timedelta(target_step) / pd.tseries.frequencies.to_offset(source_step)
+        )

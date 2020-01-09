@@ -9,7 +9,7 @@ import nested_admin
 from enhydris.admin.station import InlinePermissionsMixin, StationAdmin
 from enhydris.models import Timeseries
 
-from .models import CurveInterpolation, CurvePeriod, RangeCheck
+from .models import Aggregation, CurveInterpolation, CurvePeriod, RangeCheck
 
 
 class AutoProcessFormSet(forms.BaseInlineFormSet):
@@ -126,3 +126,27 @@ class CurveInterpolationInline(
 
 
 StationAdmin.inlines.append(CurveInterpolationInline)
+
+
+class AggregationForm(AutoProcessForm):
+    class Meta:
+        model = Aggregation
+        fields = (
+            "source_timeseries",
+            "target_timeseries",
+            "method",
+            "resulting_timestamp_offset",
+        )
+        widgets = {"resulting_timestamp_offset": forms.TextInput(attrs={"size": 7})}
+
+
+class AggregationInline(InlinePermissionsMixin, nested_admin.NestedTabularInline):
+    model = Aggregation
+    classes = ("collapse",)
+    formset = AutoProcessFormSet
+    form = AggregationForm
+    verbose_name = _("Aggregation")
+    verbose_name_plural = _("Aggregations")
+
+
+StationAdmin.inlines.append(AggregationInline)

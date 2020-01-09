@@ -14,6 +14,7 @@ from enhydris.models import Station, Timeseries
 from enhydris.tests import RandomEnhydrisTimeseriesDataDir
 from enhydris_autoprocess import tasks
 from enhydris_autoprocess.models import (
+    Aggregation,
     AutoProcess,
     CurveInterpolation,
     CurvePeriod,
@@ -545,3 +546,140 @@ class CurveInterpolationProcessTimeseriesTestCase(TestCase):
             start_date=start_date,
             end_date=end_date,
         )
+
+
+class AggregationTestCase(TestCase):
+    def setUp(self):
+        self.station = mommy.make(Station)
+        self.timeseries1 = mommy.make(Timeseries, gentity=self.station)
+        self.timeseries2 = mommy.make(Timeseries, gentity=self.station)
+
+    def test_create(self):
+        aggregation = Aggregation(
+            station=self.station,
+            source_timeseries=self.timeseries1,
+            target_timeseries=self.timeseries2,
+            method="sum",
+        )
+        aggregation.save()
+        self.assertEqual(Aggregation.objects.count(), 1)
+
+    def _mommy_make_aggregation(self):
+        return mommy.make(
+            Aggregation,
+            station=self.station,
+            source_timeseries=self.timeseries1,
+            target_timeseries=self.timeseries2,
+        )
+
+    def test_update(self):
+        self._mommy_make_aggregation()
+        aggregation = Aggregation.objects.first()
+        aggregation.method = "max"
+        aggregation.save()
+        self.assertEqual(aggregation.method, "max")
+
+    def test_delete(self):
+        self._mommy_make_aggregation()
+        aggregation = Aggregation.objects.first()
+        aggregation.delete()
+        self.assertEqual(Aggregation.objects.count(), 0)
+
+    def test_str(self):
+        aggregation = self._mommy_make_aggregation()
+        self.assertEqual(
+            str(aggregation), "Aggregation for {}".format(self.timeseries1)
+        )
+
+    def test_wrong_resulting_timestamp_offset_1(self):
+        aggregation = self._mommy_make_aggregation()
+        aggregation.resulting_timestamp_offset = "hello"
+        with self.assertRaises(IntegrityError):
+            aggregation.save()
+
+    def test_wrong_resulting_timestamp_offset_2(self):
+        aggregation = self._mommy_make_aggregation()
+        aggregation.resulting_timestamp_offset = "-"
+        with self.assertRaises(IntegrityError):
+            aggregation.save()
+
+    def test_wrong_resulting_timestamp_offset_3(self):
+        aggregation = self._mommy_make_aggregation()
+        aggregation.resulting_timestamp_offset = "15"
+        with self.assertRaises(IntegrityError):
+            aggregation.save()
+
+    def test_wrong_resulting_timestamp_offset_4(self):
+        aggregation = self._mommy_make_aggregation()
+        aggregation.resulting_timestamp_offset = "-min"
+        with self.assertRaises(IntegrityError):
+            aggregation.save()
+
+    def test_positive_time_step_without_number(self):
+        aggregation = self._mommy_make_aggregation()
+        aggregation.resulting_timestamp_offset = "min"
+        aggregation.save()
+
+    def test_positive_time_step_with_number(self):
+        aggregation = self._mommy_make_aggregation()
+        aggregation.resulting_timestamp_offset = "15min"
+        aggregation.save()
+
+    def test_negative_time_step(self):
+        aggregation = self._mommy_make_aggregation()
+        aggregation.resulting_timestamp_offset = "-1min"
+        aggregation.save()
+
+
+class AggregationProcessTimeseriesTestCase(TestCase):
+    _index = [
+        dt.datetime(2019, 5, 21, 10, 00),
+        dt.datetime(2019, 5, 21, 10, 10),
+        dt.datetime(2019, 5, 21, 10, 21),
+        dt.datetime(2019, 5, 21, 10, 31),
+        dt.datetime(2019, 5, 21, 10, 40),
+        dt.datetime(2019, 5, 21, 10, 50),
+        dt.datetime(2019, 5, 21, 11, 00),
+        dt.datetime(2019, 5, 21, 11, 10),
+        dt.datetime(2019, 5, 21, 11, 20),
+        dt.datetime(2019, 5, 21, 11, 30),
+        dt.datetime(2019, 5, 21, 11, 40),
+        dt.datetime(2019, 5, 21, 11, 50),
+        dt.datetime(2019, 5, 21, 12, 00),
+        dt.datetime(2019, 5, 21, 12, 10),
+        dt.datetime(2019, 5, 21, 12, 20),
+        dt.datetime(2019, 5, 21, 12, 30),
+        dt.datetime(2019, 5, 21, 12, 40),
+    ]
+    _values = [2, 3, 5, 7, 11, 13, 17, 19, np.nan, 29, 31, 37, 41, 43, 47, 53, 59]
+
+    source_timeseries = pd.DataFrame(
+        data={"value": _values, "flags": 17 * [""]},
+        columns=["value", "flags"],
+        index=_index,
+    )
+
+    expected_result = pd.DataFrame(
+        data={"value": [56.0], "flags": [""]},
+        columns=["value", "flags"],
+        index=[dt.datetime(2019, 5, 21, 10, 59)],
+    )
+
+    def test_execute(self):
+        station = mommy.make(Station)
+        self.aggregation = mommy.make(
+            Aggregation,
+            station=station,
+            source_timeseries__gentity=station,
+            source_timeseries__variable__descr="Hello",
+            source_timeseries__time_step="10min",
+            target_timeseries__gentity=station,
+            target_timeseries__variable__descr="Hello",
+            target_timeseries__time_step="H",
+            method="sum",
+            resulting_timestamp_offset="1min",
+        )
+        self.aggregation.htimeseries = HTimeseries(self.source_timeseries)
+        self.aggregation.htimeseries.time_step = "10min"
+        result = self.aggregation.process_timeseries().data
+        pd.testing.assert_frame_equal(result, self.expected_result)

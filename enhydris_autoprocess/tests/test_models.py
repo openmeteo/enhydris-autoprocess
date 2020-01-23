@@ -560,6 +560,7 @@ class AggregationTestCase(TestCase):
             source_timeseries=self.timeseries1,
             target_timeseries=self.timeseries2,
             method="sum",
+            max_missing=0,
         )
         aggregation.save()
         self.assertEqual(Aggregation.objects.count(), 1)
@@ -659,13 +660,29 @@ class AggregationProcessTimeseriesTestCase(TestCase):
         index=_index,
     )
 
-    expected_result = pd.DataFrame(
+    expected_result_for_max_missing_zero = pd.DataFrame(
         data={"value": [56.0], "flags": [""]},
         columns=["value", "flags"],
         index=[dt.datetime(2019, 5, 21, 10, 59)],
     )
 
-    def test_execute(self):
+    expected_result_for_max_missing_one = pd.DataFrame(
+        data={"value": [56.0, 157.0], "flags": ["", "MISS"]},
+        columns=["value", "flags"],
+        index=[dt.datetime(2019, 5, 21, 10, 59), dt.datetime(2019, 5, 21, 11, 59)],
+    )
+
+    expected_result_for_max_missing_five = pd.DataFrame(
+        data={"value": [2.0, 56.0, 157.0], "flags": ["MISS", "", "MISS"]},
+        columns=["value", "flags"],
+        index=[
+            dt.datetime(2019, 5, 21, 9, 59),
+            dt.datetime(2019, 5, 21, 10, 59),
+            dt.datetime(2019, 5, 21, 11, 59),
+        ],
+    )
+
+    def _execute(self, max_missing):
         station = mommy.make(Station)
         self.aggregation = mommy.make(
             Aggregation,
@@ -677,9 +694,25 @@ class AggregationProcessTimeseriesTestCase(TestCase):
             target_timeseries__variable__descr="Hello",
             target_timeseries__time_step="H",
             method="sum",
+            max_missing=max_missing,
             resulting_timestamp_offset="1min",
         )
         self.aggregation.htimeseries = HTimeseries(self.source_timeseries)
         self.aggregation.htimeseries.time_step = "10min"
-        result = self.aggregation.process_timeseries().data
-        pd.testing.assert_frame_equal(result, self.expected_result)
+        return self.aggregation.process_timeseries().data
+
+    def test_execute_for_max_missing_zero(self):
+        result = self._execute(max_missing=0)
+        pd.testing.assert_frame_equal(result, self.expected_result_for_max_missing_zero)
+
+    def test_execute_for_max_missing_one(self):
+        result = self._execute(max_missing=1)
+        pd.testing.assert_frame_equal(result, self.expected_result_for_max_missing_one)
+
+    def test_execute_for_max_missing_five(self):
+        result = self._execute(max_missing=5)
+        pd.testing.assert_frame_equal(result, self.expected_result_for_max_missing_five)
+
+    def test_execute_for_max_missing_too_high(self):
+        result = self._execute(max_missing=10000)
+        pd.testing.assert_frame_equal(result, self.expected_result_for_max_missing_five)

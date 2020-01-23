@@ -177,6 +177,19 @@ class Aggregation(AutoProcess):
         ("min", "Min"),
     ]
     method = models.CharField(max_length=4, choices=METHOD_CHOICES)
+    max_missing = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Defines what happens if some of the source records corresponding to a "
+            "destination record are missing. Suppose you are aggregating ten-minute "
+            "to hourly and for 23 January between 12:00 and 13:00 there are only "
+            "four nonempty records in the ten-minute time series (instead of the "
+            "usual six). If you set this to 1 or lower, the hourly record for 23 "
+            "January 13:00 will be empty; if 2 or larger, the hourly value will be "
+            "derived from the four values. In the latter case, the MISS flag will "
+            "also be set in the resulting record."
+        ),
+    )
     resulting_timestamp_offset = models.CharField(
         max_length=7,
         blank=True,
@@ -213,8 +226,10 @@ class Aggregation(AutoProcess):
             )
 
     def process_timeseries(self):
+        self.source_end_date = self.htimeseries.data.index[-1]
         self._regularize_time_series()
         self._aggregate_time_series()
+        self._trim_last_record_if_not_complete()
         return self.htimeseries
 
     def _regularize_time_series(self):
@@ -223,7 +238,11 @@ class Aggregation(AutoProcess):
     def _aggregate_time_series(self):
         source_step = self._get_source_step()
         target_step = self._get_target_step()
-        min_count = self._divide_target_step_by_source_step(source_step, target_step)
+        min_count = (
+            self._divide_target_step_by_source_step(source_step, target_step)
+            - self.max_missing
+        )
+        min_count = max(min_count, 1)
         self.htimeseries = aggregate(
             self.htimeseries,
             target_step,
@@ -244,4 +263,25 @@ class Aggregation(AutoProcess):
     def _divide_target_step_by_source_step(self, source_step, target_step):
         return int(
             pd.Timedelta(target_step) / pd.tseries.frequencies.to_offset(source_step)
+        )
+
+    def _trim_last_record_if_not_complete(self):
+        # If the very last record of the time series has the "MISS" flag, it means it
+        # was derived with one or more missing values in the source.  We don't want to
+        # leave such a record at the end of the target time series, or it won't be
+        # re-calculated when more data becomes available, because processing begins at
+        # the record following the last existing one.
+        if self._last_target_record_needs_trimming():
+            self.htimeseries.data = self.htimeseries.data[:-1]
+
+    def _last_target_record_needs_trimming(self):
+        if len(self.htimeseries.data.index) == 0:
+            return False
+        last_target_record = self.htimeseries.data.iloc[-1]
+        last_target_record_date = last_target_record.name + pd.Timedelta(
+            self.resulting_timestamp_offset
+        )
+        return (
+            "MISS" in last_target_record["flags"]
+            and self.source_end_date < last_target_record_date
         )

@@ -135,6 +135,7 @@ class AggregationForm(AutoProcessForm):
             "source_timeseries",
             "target_timeseries",
             "method",
+            "max_missing",
             "resulting_timestamp_offset",
         )
         widgets = {"resulting_timestamp_offset": forms.TextInput(attrs={"size": 7})}

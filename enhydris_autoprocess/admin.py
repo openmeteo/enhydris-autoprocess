@@ -11,6 +11,18 @@ from enhydris.models import Timeseries
 
 from .models import Aggregation, CurveInterpolation, CurvePeriod, RangeCheck
 
+# We override StationAdmin's render_change_form method in order to specify a custom
+# template. We do this in order to offer some model-wide help (help_text is only
+# available for fields).
+
+
+def render_change_form(self, *args, **kwargs):
+    self.change_form_template = "enhydris_autoprocess/station_change_form.html"
+    return super(StationAdmin, self).render_change_form(*args, **kwargs)
+
+
+StationAdmin.render_change_form = render_change_form
+
 
 class AutoProcessFormSet(forms.BaseInlineFormSet):
     """Formset that passes station to the form.

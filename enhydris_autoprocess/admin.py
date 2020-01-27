@@ -113,7 +113,7 @@ class CurvePeriodForm(forms.ModelForm):
         return result
 
 
-class CurvePeriodInline(nested_admin.NestedTabularInline):
+class CurvePeriodInline(InlinePermissionsMixin, nested_admin.NestedTabularInline):
     model = CurvePeriod
     form = CurvePeriodForm
     points = models.CharField()

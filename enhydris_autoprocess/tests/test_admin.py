@@ -1,12 +1,15 @@
 import datetime as dt
 
-from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.test import TestCase, override_settings
 
 from model_mommy import mommy
 
 from enhydris.models import Station
 from enhydris_autoprocess.admin import CurvePeriodForm
 from enhydris_autoprocess.models import CurveInterpolation, CurvePeriod, CurvePoint
+
+User = get_user_model()
 
 
 class CurvePeriodFormTestCase(TestCase):
@@ -67,3 +70,24 @@ class CurvePeriodFormTestCase(TestCase):
             form.errors["points"][0],
             'Error in line 1: "garbage" is not a valid pair of numbers',
         )
+
+
+@override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
+class CurvePeriodsPermissionTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="alice",
+            email="alice@alice.com",
+            password="topsecret",
+            is_active=True,
+            is_staff=True,
+            is_superuser=False,
+        )
+        self.station = mommy.make(Station, creator=self.user)
+
+    def test_curve_periods_are_shown(self):
+        assert self.client.login(username="alice", password="topsecret") is True
+        response = self.client.get(
+            "/admin/enhydris/station/{}/change/".format(self.station.id)
+        )
+        self.assertContains(response, "Curve periods")

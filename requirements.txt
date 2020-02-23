@@ -1,2 +1,2 @@
 celery>=4,<5
-haggregate>=1.0.1,<2
+haggregate>=2,<3

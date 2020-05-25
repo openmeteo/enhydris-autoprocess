@@ -11,7 +11,6 @@ from htimeseries import HTimeseries
 from model_mommy import mommy
 
 from enhydris.models import Station, Timeseries
-from enhydris.tests import RandomEnhydrisTimeseriesDataDir
 from enhydris_autoprocess import tasks
 from enhydris_autoprocess.models import (
     Aggregation,
@@ -106,7 +105,6 @@ class AutoProcessTestCase(TestCase):
         )
 
 
-@RandomEnhydrisTimeseriesDataDir()
 class AutoProcessExecuteTestCase(TestCase):
     @mock.patch(
         "enhydris_autoprocess.models.RangeCheck.process_timeseries",
@@ -117,10 +115,16 @@ class AutoProcessExecuteTestCase(TestCase):
         self.mock_execute = m
         station = mommy.make(Station)
         self.source_timeseries = mommy.make(
-            Timeseries, gentity=station, variable__descr="irrelevant"
+            Timeseries,
+            gentity=station,
+            variable__descr="irrelevant",
+            time_zone__utc_offset=120,
         )
         self.target_timeseries = mommy.make(
-            Timeseries, gentity=station, variable__descr="irrelevant"
+            Timeseries,
+            gentity=station,
+            variable__descr="irrelevant",
+            time_zone__utc_offset=120,
         )
         self.range_check = mommy.make(
             RangeCheck,
@@ -137,7 +141,6 @@ class AutoProcessExecuteTestCase(TestCase):
         self.assertEqual(len(self.range_check.htimeseries.data), 0)
 
 
-@RandomEnhydrisTimeseriesDataDir()
 class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
     @mock.patch(
         "enhydris_autoprocess.models.RangeCheck.process_timeseries",

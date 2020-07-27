@@ -10,11 +10,12 @@ import pandas as pd
 from htimeseries import HTimeseries
 from model_mommy import mommy
 
-from enhydris.models import Station, Timeseries
+from enhydris.models import Station, Timeseries, TimeseriesGroup, Variable
 from enhydris_autoprocess import tasks
 from enhydris_autoprocess.models import (
     Aggregation,
     AutoProcess,
+    Checks,
     CurveInterpolation,
     CurvePeriod,
     CurvePoint,
@@ -24,14 +25,9 @@ from enhydris_autoprocess.models import (
 
 class AutoProcessTestCase(TestCase):
     def setUp(self):
-        self.station1 = mommy.make(Station)
-        self.timeseries1_1 = mommy.make(Timeseries, gentity=self.station1)
-        self.timeseries1_2 = mommy.make(Timeseries, gentity=self.station1)
-        self.timeseries1_3 = mommy.make(Timeseries, gentity=self.station1)
-        self.station2 = mommy.make(Station)
-        self.timeseries2_1 = mommy.make(Timeseries, gentity=self.station2)
-        self.timeseries2_2 = mommy.make(Timeseries, gentity=self.station2)
-        self.timeseries2_3 = mommy.make(Timeseries, gentity=self.station2)
+        self.station = mommy.make(Station)
+        self.timeseries_group1 = mommy.make(TimeseriesGroup, gentity=self.station)
+        self.timeseries_group2 = mommy.make(TimeseriesGroup, gentity=self.station)
 
         self.original_execute_auto_process = tasks.execute_auto_process
         tasks.execute_auto_process = mock.MagicMock()
@@ -40,65 +36,25 @@ class AutoProcessTestCase(TestCase):
         tasks.execute_auto_process = self.original_execute_auto_process
 
     def test_create(self):
-        auto_process = AutoProcess(
-            station=self.station1,
-            source_timeseries=self.timeseries1_1,
-            target_timeseries=self.timeseries1_2,
-        )
+        auto_process = Checks(timeseries_group=self.timeseries_group1)
         auto_process.save()
         self.assertEqual(AutoProcess.objects.count(), 1)
 
     def test_update(self):
-        mommy.make(
-            AutoProcess,
-            station=self.station1,
-            source_timeseries=self.timeseries1_1,
-            target_timeseries=self.timeseries1_2,
-        )
+        mommy.make(Checks, timeseries_group=self.timeseries_group1)
         auto_process = AutoProcess.objects.first()
-        auto_process.target_timeseries = self.timeseries1_3
+        auto_process.timeseries_group = self.timeseries_group2
         auto_process.save()
-        self.assertEqual(auto_process.target_timeseries.id, self.timeseries1_3.id)
+        self.assertEqual(auto_process.timeseries_group.id, self.timeseries_group2.id)
 
     def test_delete(self):
-        mommy.make(
-            AutoProcess,
-            station=self.station1,
-            source_timeseries=self.timeseries1_1,
-            target_timeseries=self.timeseries1_2,
-        )
+        mommy.make(Checks, timeseries_group=self.timeseries_group1)
         auto_process = AutoProcess.objects.first()
         auto_process.delete()
         self.assertEqual(AutoProcess.objects.count(), 0)
 
-    def test_only_accepts_source_timeseries_from_station(self):
-        auto_process = mommy.make(
-            AutoProcess,
-            station=self.station1,
-            source_timeseries=self.timeseries1_1,
-            target_timeseries=self.timeseries1_2,
-        )
-        auto_process.source_timeseries = self.timeseries2_1
-        with self.assertRaises(IntegrityError):
-            auto_process.save()
-
-    def test_only_accepts_target_timeseries_from_station(self):
-        auto_process = mommy.make(
-            AutoProcess,
-            station=self.station1,
-            source_timeseries=self.timeseries1_1,
-            target_timeseries=self.timeseries1_2,
-        )
-        auto_process.target_timeseries = self.timeseries2_1
-        with self.assertRaises(IntegrityError):
-            auto_process.save()
-
     def test_save_triggers_auto_process(self):
-        auto_process = AutoProcess(
-            station=self.station1,
-            source_timeseries=self.timeseries1_1,
-            target_timeseries=self.timeseries1_2,
-        )
+        auto_process = mommy.make(Checks, timeseries_group=self.timeseries_group1)
         auto_process.save()
         tasks.execute_auto_process.apply_async.assert_any_call(
             args=[auto_process.id], countdown=1
@@ -107,51 +63,47 @@ class AutoProcessTestCase(TestCase):
 
 class AutoProcessExecuteTestCase(TestCase):
     @mock.patch(
-        "enhydris_autoprocess.models.RangeCheck.process_timeseries",
+        "enhydris_autoprocess.models.Checks.process_timeseries",
         side_effect=lambda self: self.htimeseries,
         autospec=True,
     )
     def setUp(self, m):
         self.mock_execute = m
         station = mommy.make(Station)
-        self.source_timeseries = mommy.make(
-            Timeseries,
+        self.timeseries_group = mommy.make(
+            TimeseriesGroup,
             gentity=station,
             variable__descr="irrelevant",
             time_zone__utc_offset=120,
         )
-        self.target_timeseries = mommy.make(
-            Timeseries,
-            gentity=station,
-            variable__descr="irrelevant",
-            time_zone__utc_offset=120,
-        )
-        self.range_check = mommy.make(
-            RangeCheck,
-            station=station,
-            source_timeseries=self.source_timeseries,
-            target_timeseries=self.target_timeseries,
-        )
-        self.range_check.execute()
+        self.checks = mommy.make(Checks, timeseries_group=self.timeseries_group)
+        self.range_check = mommy.make(RangeCheck, checks=self.checks)
+        self.checks.execute()
 
     def test_called_once(self):
         self.assertEqual(len(self.mock_execute.mock_calls), 1)
 
     def test_called_with_empty_content(self):
-        self.assertEqual(len(self.range_check.htimeseries.data), 0)
+        self.assertEqual(len(self.checks.htimeseries.data), 0)
 
 
 class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
     @mock.patch(
-        "enhydris_autoprocess.models.RangeCheck.process_timeseries",
+        "enhydris_autoprocess.models.Checks.process_timeseries",
         side_effect=lambda self: self.htimeseries,
         autospec=True,
     )
     def setUp(self, m):
         self.mock_process_timeseries = m
         station = mommy.make(Station)
+        self.timeseries_group = mommy.make(
+            TimeseriesGroup,
+            gentity=station,
+            time_zone__utc_offset=0,
+            variable__descr="h",
+        )
         self.source_timeseries = mommy.make(
-            Timeseries, gentity=station, time_zone__utc_offset=0, variable__descr="h"
+            Timeseries, timeseries_group=self.timeseries_group, type=Timeseries.RAW
         )
         self.source_timeseries.set_data(
             pd.DataFrame(
@@ -166,7 +118,7 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
             )
         )
         self.target_timeseries = mommy.make(
-            Timeseries, gentity=station, time_zone__utc_offset=0, variable__descr="h"
+            Timeseries, timeseries_group=self.timeseries_group, type=Timeseries.CHECKED
         )
         self.target_timeseries.set_data(
             pd.DataFrame(
@@ -178,18 +130,14 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
                 ],
             )
         )
-        self.range_check = mommy.make(
-            RangeCheck,
-            station=station,
-            source_timeseries=self.source_timeseries,
-            target_timeseries=self.target_timeseries,
-        )
+        self.checks = mommy.make(Checks, timeseries_group=self.timeseries_group)
+        self.range_check = mommy.make(RangeCheck, checks=self.checks)
 
-        # We could simply run self.range_check.execute() here. However,
+        # We could simply run self.checks.execute() here. However,
         # normally it is the parent's execute() that runs, and it finds the child and
         # runs it. So we also run the parent's execute() to ensure things work
         # correctly.
-        self.range_check.autoprocess_ptr.execute()
+        self.checks.autoprocess_ptr.execute()
 
     def test_called_once(self):
         self.assertEqual(len(self.mock_process_timeseries.mock_calls), 1)
@@ -201,7 +149,7 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
             index=[dt.datetime(2019, 5, 21, 17, 20), dt.datetime(2019, 5, 21, 17, 30)],
         )
         expected_arg.index.name = "date"
-        pd.testing.assert_frame_equal(self.range_check.htimeseries.data, expected_arg)
+        pd.testing.assert_frame_equal(self.checks.htimeseries.data, expected_arg)
 
     def test_appended_the_data(self):
         expected_result = pd.DataFrame(
@@ -220,29 +168,85 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
         )
 
 
-class RangeCheckTestCase(TestCase):
-    def setUp(self):
-        self.station = mommy.make(Station)
-        self.timeseries1 = mommy.make(Timeseries, gentity=self.station)
-        self.timeseries2 = mommy.make(Timeseries, gentity=self.station)
+class ChecksTestCase(TestCase):
+    def test_create(self):
+        timeseries_group = mommy.make(TimeseriesGroup)
+        checks = Checks(timeseries_group=timeseries_group)
+        checks.save()
+        self.assertEqual(Checks.objects.count(), 1)
 
+    def test_update(self):
+        timeseries_group1 = mommy.make(TimeseriesGroup, id=42)
+        timeseries_group2 = mommy.make(TimeseriesGroup, id=43)
+        checks = mommy.make(Checks, timeseries_group=timeseries_group1)
+        checks.timeseries_group = timeseries_group2
+        checks.save()
+        self.assertEqual(Checks.objects.first().timeseries_group.id, 43)
+
+    def test_delete(self):
+        checks = mommy.make(Checks)
+        checks.delete()
+        self.assertEqual(Checks.objects.count(), 0)
+
+    def test_str(self):
+        checks = mommy.make(Checks, timeseries_group__name="Temperature")
+        self.assertEqual(str(checks), "Checks for Temperature")
+
+    def test_source_timeseries(self):
+        self.timeseries_group = mommy.make(TimeseriesGroup)
+        self._make_timeseries(id=42, type=Timeseries.RAW)
+        self._make_timeseries(id=41, type=Timeseries.CHECKED)
+        checks = mommy.make(Checks, timeseries_group=self.timeseries_group)
+        self.assertEqual(checks.source_timeseries.id, 42)
+
+    def _make_timeseries(self, id, type):
+        return mommy.make(
+            Timeseries, id=id, timeseries_group=self.timeseries_group, type=type
+        )
+
+    def test_automatically_creates_source_timeseries(self):
+        timeseries_group = mommy.make(TimeseriesGroup)
+        checks = mommy.make(Checks, timeseries_group=timeseries_group)
+        self.assertFalse(Timeseries.objects.exists())
+        checks.source_timeseries.id
+        self.assertTrue(Timeseries.objects.exists())
+
+    def test_target_timeseries(self):
+        self.timeseries_group = mommy.make(TimeseriesGroup)
+        self._make_timeseries(id=42, type=Timeseries.RAW)
+        self._make_timeseries(id=41, type=Timeseries.CHECKED)
+        checks = mommy.make(Checks, timeseries_group=self.timeseries_group)
+        self.assertEqual(checks.target_timeseries.id, 41)
+
+    def test_automatically_creates_target_timeseries(self):
+        timeseries_group = mommy.make(TimeseriesGroup)
+        checks = mommy.make(Checks, timeseries_group=timeseries_group)
+        self.assertFalse(Timeseries.objects.exists())
+        checks.target_timeseries.id
+        self.assertTrue(Timeseries.objects.exists())
+
+    @mock.patch("enhydris_autoprocess.models.RangeCheck.check_timeseries")
+    def test_runs_range_check(self, m):
+        station = mommy.make(Station)
+        range_check = mommy.make(
+            RangeCheck,
+            checks__timeseries_group__gentity=station,
+            checks__timeseries_group__time_zone__utc_offset=0,
+            checks__timeseries_group__variable__descr="Temperature",
+        )
+        range_check.checks.execute()
+        m.assert_called_once_with()
+
+
+class RangeCheckTestCase(TestCase):
     def _mommy_make_range_check(self):
         return mommy.make(
-            RangeCheck,
-            station=self.station,
-            source_timeseries=self.timeseries1,
-            target_timeseries=self.timeseries2,
-            upper_bound=55.0,
+            RangeCheck, checks__timeseries_group__name="pH", upper_bound=55.0
         )
 
     def test_create(self):
-        range_check = RangeCheck(
-            station=self.station,
-            source_timeseries=self.timeseries1,
-            target_timeseries=self.timeseries2,
-            upper_bound=42.7,
-            lower_bound=-5.2,
-        )
+        checks = mommy.make(Checks)
+        range_check = RangeCheck(checks=checks, upper_bound=42.7, lower_bound=-5.2)
         range_check.save()
         self.assertEqual(RangeCheck.objects.count(), 1)
 
@@ -261,9 +265,7 @@ class RangeCheckTestCase(TestCase):
 
     def test_str(self):
         range_check = self._mommy_make_range_check()
-        self.assertEqual(
-            str(range_check), "Range check for {}".format(self.timeseries1)
-        )
+        self.assertEqual(str(range_check), "Range check for pH")
 
 
 class RangeCheckProcessTimeseriesTestCase(TestCase):
@@ -304,57 +306,45 @@ class RangeCheckProcessTimeseriesTestCase(TestCase):
     )
 
     def test_execute(self):
-        station = mommy.make(Station)
         self.range_check = mommy.make(
             RangeCheck,
             lower_bound=2,
             upper_bound=5,
             soft_lower_bound=3,
             soft_upper_bound=4,
-            station=station,
-            source_timeseries__gentity=station,
-            target_timeseries__gentity=station,
         )
-        self.range_check.htimeseries = HTimeseries(self.source_timeseries)
-        result = self.range_check.process_timeseries()
+        self.range_check.checks.htimeseries = HTimeseries(self.source_timeseries)
+        result = self.range_check.checks.process_timeseries()
         pd.testing.assert_frame_equal(result, self.expected_result)
 
 
 class CurveInterpolationTestCase(TestCase):
     def setUp(self):
         self.station = mommy.make(Station)
-        self.timeseries1 = mommy.make(Timeseries, gentity=self.station)
-        self.timeseries2 = mommy.make(Timeseries, gentity=self.station)
+        self.timeseries_group1 = mommy.make(TimeseriesGroup, gentity=self.station)
+        self.timeseries_group2 = mommy.make(
+            TimeseriesGroup, gentity=self.station, name="Group 2"
+        )
 
     def test_create(self):
         curve_interpolation = CurveInterpolation(
-            station=self.station,
-            source_timeseries=self.timeseries1,
-            target_timeseries=self.timeseries2,
-            name="Stage-discharge",
+            timeseries_group=self.timeseries_group1,
+            target_timeseries_group=self.timeseries_group2,
         )
         curve_interpolation.save()
         self.assertEqual(CurveInterpolation.objects.count(), 1)
 
     def test_update(self):
-        mommy.make(
-            CurveInterpolation,
-            station=self.station,
-            source_timeseries=self.timeseries1,
-            target_timeseries=self.timeseries2,
-        )
+        mommy.make(CurveInterpolation, timeseries_group=self.timeseries_group1)
         curve_interpolation = CurveInterpolation.objects.first()
-        curve_interpolation.name = "Stage-discharge"
+        curve_interpolation.timeseries_group = self.timeseries_group2
         curve_interpolation.save()
-        self.assertEqual(curve_interpolation.name, "Stage-discharge")
+        self.assertEqual(
+            curve_interpolation.timeseries_group.id, self.timeseries_group2.id
+        )
 
     def test_delete(self):
-        mommy.make(
-            CurveInterpolation,
-            station=self.station,
-            source_timeseries=self.timeseries1,
-            target_timeseries=self.timeseries2,
-        )
+        mommy.make(CurveInterpolation, timeseries_group=self.timeseries_group1)
         curve_interpolation = CurveInterpolation.objects.first()
         curve_interpolation.delete()
         self.assertEqual(CurveInterpolation.objects.count(), 0)
@@ -362,28 +352,63 @@ class CurveInterpolationTestCase(TestCase):
     def test_str(self):
         curve_interpolation = mommy.make(
             CurveInterpolation,
-            station=self.station,
-            source_timeseries=self.timeseries1,
-            target_timeseries=self.timeseries2,
-            name="Stage-discharge",
+            timeseries_group=self.timeseries_group1,
+            target_timeseries_group=self.timeseries_group2,
         )
-        self.assertEqual(str(curve_interpolation), "Stage-discharge")
+        self.assertEqual(str(curve_interpolation), "=> Group 2")
+
+    def test_source_timeseries(self):
+        self._make_timeseries(id=42, timeseries_group_num=1, type=Timeseries.RAW)
+        self._make_timeseries(id=41, timeseries_group_num=2, type=Timeseries.PROCESSED)
+        ci = mommy.make(
+            CurveInterpolation,
+            timeseries_group=self.timeseries_group1,
+            target_timeseries_group=self.timeseries_group2,
+        )
+        self.assertEqual(ci.source_timeseries.id, 42)
+
+    def _make_timeseries(self, id, timeseries_group_num, type):
+        timeseries_group = getattr(self, f"timeseries_group{timeseries_group_num}")
+        return mommy.make(
+            Timeseries, id=id, timeseries_group=timeseries_group, type=type
+        )
+
+    def test_automatically_creates_source_timeseries(self):
+        ci = mommy.make(
+            CurveInterpolation,
+            timeseries_group=self.timeseries_group1,
+            target_timeseries_group=self.timeseries_group2,
+        )
+        self.assertFalse(Timeseries.objects.exists())
+        ci.source_timeseries.id
+        self.assertTrue(Timeseries.objects.exists())
+
+    def test_target_timeseries(self):
+        self._make_timeseries(id=42, timeseries_group_num=1, type=Timeseries.RAW)
+        self._make_timeseries(id=41, timeseries_group_num=2, type=Timeseries.PROCESSED)
+        ci = mommy.make(
+            CurveInterpolation,
+            timeseries_group=self.timeseries_group1,
+            target_timeseries_group=self.timeseries_group2,
+        )
+        self.assertEqual(ci.target_timeseries.id, 41)
+
+    def test_automatically_creates_target_timeseries(self):
+        ci = mommy.make(
+            CurveInterpolation,
+            timeseries_group=self.timeseries_group1,
+            target_timeseries_group=self.timeseries_group2,
+        )
+        self.assertFalse(Timeseries.objects.exists())
+        ci.target_timeseries.id
+        self.assertTrue(Timeseries.objects.exists())
 
 
 class CurvePeriodTestCase(TestCase):
-    def setUp(self):
-        station = mommy.make(Station)
-        self.curve_interpolation = mommy.make(
-            CurveInterpolation,
-            station=station,
-            source_timeseries__gentity=station,
-            target_timeseries__gentity=station,
-            name="Stage-discharge",
-        )
-
     def test_create(self):
+        curve_interpolation = mommy.make(CurveInterpolation)
         curve_period = CurvePeriod(
-            curve_interpolation=self.curve_interpolation,
+            curve_interpolation=curve_interpolation,
             start_date=dt.date(2019, 9, 3),
             end_date=dt.date(2021, 9, 4),
         )
@@ -391,7 +416,7 @@ class CurvePeriodTestCase(TestCase):
         self.assertEqual(CurvePeriod.objects.count(), 1)
 
     def test_update(self):
-        mommy.make(CurvePeriod, curve_interpolation=self.curve_interpolation)
+        mommy.make(CurvePeriod)
         curve_period = CurvePeriod.objects.first()
         curve_period.start_date = dt.date(1963, 1, 1)
         curve_period.end_date = dt.date(1963, 12, 1)
@@ -400,7 +425,7 @@ class CurvePeriodTestCase(TestCase):
         self.assertEqual(curve_period.start_date, dt.date(1963, 1, 1))
 
     def test_delete(self):
-        mommy.make(CurvePeriod, curve_interpolation=self.curve_interpolation)
+        mommy.make(CurvePeriod)
         curve_period = CurvePeriod.objects.first()
         curve_period.delete()
         self.assertEqual(CurvePeriod.objects.count(), 0)
@@ -408,33 +433,22 @@ class CurvePeriodTestCase(TestCase):
     def test_str(self):
         curve_period = mommy.make(
             CurvePeriod,
-            curve_interpolation=self.curve_interpolation,
+            curve_interpolation__target_timeseries_group__name="Discharge",
             start_date=dt.date(2019, 9, 3),
             end_date=dt.date(2021, 9, 4),
         )
-        self.assertEqual(str(curve_period), "Stage-discharge: 2019-09-03 - 2021-09-04")
+        self.assertEqual(str(curve_period), "=> Discharge: 2019-09-03 - 2021-09-04")
 
 
 class CurvePointTestCase(TestCase):
-    def setUp(self):
-        station = mommy.make(Station)
-        self.curve_period = mommy.make(
-            CurvePeriod,
-            curve_interpolation__station=station,
-            curve_interpolation__source_timeseries__gentity=station,
-            curve_interpolation__target_timeseries__gentity=station,
-            curve_interpolation__name="Stage-discharge",
-            start_date=dt.date(2019, 9, 3),
-            end_date=dt.date(2021, 9, 4),
-        )
-
     def test_create(self):
-        point = CurvePoint(curve_period=self.curve_period, x=2.718, y=3.141)
+        curve_period = mommy.make(CurvePeriod)
+        point = CurvePoint(curve_period=curve_period, x=2.718, y=3.141)
         point.save()
         self.assertEqual(CurvePoint.objects.count(), 1)
 
     def test_update(self):
-        mommy.make(CurvePoint, curve_period=self.curve_period)
+        mommy.make(CurvePoint)
         point = CurvePoint.objects.first()
         point.x = 2.718
         point.save()
@@ -442,29 +456,29 @@ class CurvePointTestCase(TestCase):
         self.assertAlmostEqual(point.x, 2.718)
 
     def test_delete(self):
-        mommy.make(CurvePoint, curve_period=self.curve_period)
+        mommy.make(CurvePoint)
         point = CurvePoint.objects.first()
         point.delete()
         self.assertEqual(CurvePoint.objects.count(), 0)
 
     def test_str(self):
-        point = mommy.make(CurvePoint, curve_period=self.curve_period, x=2.178, y=3.141)
+        point = mommy.make(
+            CurvePoint,
+            curve_period__start_date=dt.date(2019, 9, 3),
+            curve_period__end_date=dt.date(2021, 9, 4),
+            curve_period__curve_interpolation__target_timeseries_group__name="pH",
+            x=2.178,
+            y=3.141,
+        )
         self.assertEqual(
-            str(point), "Stage-discharge: 2019-09-03 - 2021-09-04: Point (2.178, 3.141)"
+            str(point), "=> pH: 2019-09-03 - 2021-09-04: Point (2.178, 3.141)"
         )
 
 
 class CurvePeriodSetCurveTestCase(TestCase):
     def setUp(self):
-        station = mommy.make(Station)
         self.period = mommy.make(
-            CurvePeriod,
-            curve_interpolation__station=station,
-            curve_interpolation__source_timeseries__gentity=station,
-            curve_interpolation__target_timeseries__gentity=station,
-            curve_interpolation__name="Stage-discharge",
-            start_date=dt.date(2019, 9, 3),
-            end_date=dt.date(2021, 9, 4),
+            CurvePeriod, start_date=dt.date(2019, 9, 3), end_date=dt.date(2021, 9, 4),
         )
         point = CurvePoint(curve_period=self.period, x=2.718, y=3.141)
         point.save()
@@ -519,10 +533,8 @@ class CurveInterpolationProcessTimeseriesTestCase(TestCase):
         station = mommy.make(Station)
         self.curve_interpolation = mommy.make(
             CurveInterpolation,
-            station=station,
-            source_timeseries__gentity=station,
-            target_timeseries__gentity=station,
-            name="Stage-discharge",
+            timeseries_group__gentity=station,
+            target_timeseries_group__gentity=station,
         )
         self._setup_period1()
         self._setup_period2()
@@ -554,27 +566,20 @@ class CurveInterpolationProcessTimeseriesTestCase(TestCase):
 class AggregationTestCase(TestCase):
     def setUp(self):
         self.station = mommy.make(Station)
-        self.timeseries1 = mommy.make(Timeseries, gentity=self.station)
-        self.timeseries2 = mommy.make(Timeseries, gentity=self.station)
+        variable = mommy.make(Variable, descr="Irrelevant")
+        self.timeseries_group = mommy.make(
+            TimeseriesGroup, gentity=self.station, variable=variable
+        )
 
     def test_create(self):
         aggregation = Aggregation(
-            station=self.station,
-            source_timeseries=self.timeseries1,
-            target_timeseries=self.timeseries2,
-            method="sum",
-            max_missing=0,
+            timeseries_group=self.timeseries_group, method="sum", max_missing=0,
         )
         aggregation.save()
         self.assertEqual(Aggregation.objects.count(), 1)
 
     def _mommy_make_aggregation(self):
-        return mommy.make(
-            Aggregation,
-            station=self.station,
-            source_timeseries=self.timeseries1,
-            target_timeseries=self.timeseries2,
-        )
+        return mommy.make(Aggregation, timeseries_group=self.timeseries_group,)
 
     def test_update(self):
         self._mommy_make_aggregation()
@@ -592,7 +597,7 @@ class AggregationTestCase(TestCase):
     def test_str(self):
         aggregation = self._mommy_make_aggregation()
         self.assertEqual(
-            str(aggregation), "Aggregation for {}".format(self.timeseries1)
+            str(aggregation), "Aggregation for {}".format(self.timeseries_group)
         )
 
     def test_wrong_resulting_timestamp_offset_1(self):
@@ -633,6 +638,43 @@ class AggregationTestCase(TestCase):
         aggregation = self._mommy_make_aggregation()
         aggregation.resulting_timestamp_offset = "-1min"
         aggregation.save()
+
+    def test_source_timeseries(self):
+        self._make_timeseries(id=42, type=Timeseries.RAW)
+        self._make_timeseries(id=41, type=Timeseries.AGGREGATED)
+        aggregation = mommy.make(Aggregation, timeseries_group=self.timeseries_group)
+        self.assertEqual(aggregation.source_timeseries.id, 42)
+
+    def _make_timeseries(self, id, type):
+        return mommy.make(
+            Timeseries,
+            id=id,
+            timeseries_group=self.timeseries_group,
+            type=type,
+            time_step="H",
+        )
+
+    def test_automatically_creates_source_timeseries(self):
+        aggregation = mommy.make(Aggregation, timeseries_group=self.timeseries_group)
+        self.assertFalse(Timeseries.objects.exists())
+        aggregation.source_timeseries.id
+        self.assertTrue(Timeseries.objects.exists())
+
+    def test_target_timeseries(self):
+        self._make_timeseries(id=42, type=Timeseries.RAW)
+        self._make_timeseries(id=41, type=Timeseries.AGGREGATED)
+        aggregation = mommy.make(
+            Aggregation, timeseries_group=self.timeseries_group, target_time_step="H"
+        )
+        self.assertEqual(aggregation.target_timeseries.id, 41)
+
+    def test_automatically_creates_target_timeseries(self):
+        aggregation = mommy.make(
+            Aggregation, timeseries_group=self.timeseries_group, target_time_step="H"
+        )
+        self.assertFalse(Timeseries.objects.exists())
+        aggregation.target_timeseries.id
+        self.assertTrue(Timeseries.objects.exists())
 
 
 class AggregationProcessTimeseriesTestCase(TestCase):
@@ -689,13 +731,11 @@ class AggregationProcessTimeseriesTestCase(TestCase):
         station = mommy.make(Station)
         self.aggregation = mommy.make(
             Aggregation,
-            station=station,
-            source_timeseries__gentity=station,
-            source_timeseries__variable__descr="Hello",
-            source_timeseries__time_step="10min",
-            target_timeseries__gentity=station,
-            target_timeseries__variable__descr="Hello",
-            target_timeseries__time_step="H",
+            timeseries_group__gentity=station,
+            timeseries_group__variable__descr="Hello",
+            target_timeseries_group__gentity=station,
+            target_timeseries_group__variable__descr="Hello",
+            target_time_step="H",
             method="sum",
             max_missing=max_missing,
             resulting_timestamp_offset="1min",

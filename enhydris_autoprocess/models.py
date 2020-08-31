@@ -3,7 +3,7 @@ import datetime as dt
 import re
 from io import StringIO
 
-from django.db import IntegrityError, models
+from django.db import IntegrityError, models, transaction
 from django.utils.translation import gettext_lazy as _
 
 import numpy as np
@@ -53,11 +53,9 @@ class AutoProcess(models.Model):
     def save(self, *args, **kwargs):
         result = super().save(*args, **kwargs)
         self._subclass._check_integrity()
-
-        # We delay running the task by one second; otherwise it may run before the
-        # current transaction has been committed.
-        tasks.execute_auto_process.apply_async(args=[self.id], countdown=1)
-
+        transaction.on_commit(
+            lambda: tasks.execute_auto_process.apply_async(args=[self.id])
+        )
         return result
 
     def _check_integrity(self):

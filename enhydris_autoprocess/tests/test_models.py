@@ -2,8 +2,8 @@ import datetime as dt
 import textwrap
 from unittest import mock
 
-from django.db import IntegrityError
-from django.test import TestCase
+from django.db import IntegrityError, transaction
+from django.test import TestCase, TransactionTestCase
 
 import numpy as np
 import pandas as pd
@@ -53,12 +53,31 @@ class AutoProcessTestCase(TestCase):
         auto_process.delete()
         self.assertEqual(AutoProcess.objects.count(), 0)
 
+
+class AutoProcessSaveTestCase(TransactionTestCase):
+    # Setting available_apps activates TRUNCATE ... CASCADE, which is necessary because
+    # enhydris.TimeseriesRecord is unmanaged, TransactionTestCase doesn't attempt to
+    # truncate it, and PostgreSQL complains it can't truncate enhydris_timeseries
+    # without truncating enhydris_timeseriesrecord at the same time.
+    available_apps = ["enhydris_autoprocess"]
+
+    def setUp(self):
+        with transaction.atomic():
+            self.timeseries_group = mommy.make(TimeseriesGroup)
+        self.original_execute_auto_process = tasks.execute_auto_process
+        tasks.execute_auto_process = mock.MagicMock()
+
     def test_save_triggers_auto_process(self):
-        auto_process = mommy.make(Checks, timeseries_group=self.timeseries_group1)
-        auto_process.save()
-        tasks.execute_auto_process.apply_async.assert_any_call(
-            args=[auto_process.id], countdown=1
-        )
+        with transaction.atomic():
+            auto_process = mommy.make(Checks, timeseries_group=self.timeseries_group)
+            auto_process.save()
+        tasks.execute_auto_process.apply_async.assert_any_call(args=[auto_process.id])
+
+    def test_auto_process_is_not_triggered_before_commit(self):
+        with transaction.atomic():
+            auto_process = mommy.make(Checks, timeseries_group=self.timeseries_group)
+            auto_process.save()
+            tasks.execute_auto_process.apply_async.assert_not_called()
 
 
 class AutoProcessExecuteTestCase(TestCase):

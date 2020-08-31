@@ -151,12 +151,7 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
         )
         self.checks = mommy.make(Checks, timeseries_group=self.timeseries_group)
         self.range_check = mommy.make(RangeCheck, checks=self.checks)
-
-        # We could simply run self.checks.execute() here. However,
-        # normally it is the parent's execute() that runs, and it finds the child and
-        # runs it. So we also run the parent's execute() to ensure things work
-        # correctly.
-        self.checks.autoprocess_ptr.execute()
+        self.checks.execute()
 
     def test_called_once(self):
         self.assertEqual(len(self.mock_process_timeseries.mock_calls), 1)

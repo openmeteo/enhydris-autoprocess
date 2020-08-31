@@ -76,7 +76,7 @@ other and they result in the "checked" time series.)
   auto-process applies.
 - ``execute()``. Performs the auto-processing. It retrieves the new
   part of the source time series (i.e. the part that starts after the
-  last date of the target time series) and calls the (subclass's)
+  last date of the target time series) and calls the
   ``process_timeseries()`` method.
 - ``source_timeseries`` (property). The source time series of the time
   series group for this auto-process. It depends on the kind of

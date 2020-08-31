@@ -8,7 +8,7 @@ def enqueue_auto_process(sender, *, instance, **kwargs):
     auto_processes = [
         auto_process
         for auto_process in instance.timeseries_group.autoprocess_set.all()
-        if auto_process.source_timeseries == instance
+        if auto_process.as_specific_instance.source_timeseries == instance
     ]
     for auto_process in auto_processes:
         tasks.execute_auto_process.delay(auto_process.id)

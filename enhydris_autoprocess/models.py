@@ -22,37 +22,41 @@ class AutoProcess(models.Model):
         verbose_name_plural = _("Auto processes")
 
     def execute(self):
-        self.htimeseries = self._subclass.source_timeseries.get_data(
+        self.htimeseries = self.source_timeseries.get_data(
             start_date=self._get_start_date()
         )
-        result = self._subclass.process_timeseries()
-        self._subclass.target_timeseries.append_data(result)
+        result = self.process_timeseries()
+        self.target_timeseries.append_data(result)
 
     @property
-    def _subclass(self):
-        """Return the AutoProcess subclass for this instance.
+    def as_specific_instance(self):
+        """Return the AutoProcess as an instance of the appropriate subclass.
 
         AutoProcess is essentially an abstract base class; its instances are always one
         of its subclasses, i.e. Checks, CurveInterpolation, or Aggregation. Sometimes we
         might have an AutoProcess instance without yet knowing what subclass it is; in
-        that case, "myinstance._subclass" is the subclass.
+        that case, "myinstance.as_specific_instance" is the subclass.
+
+        The method works by following the reverse implied one-to-one relationships
+        created by Django when using multi-table inheritance. If auto_process is an
+        AutoProcess object and there exists a related Checks object, this is accessible
+        as auto_process.checks. So by checking whether the auto_process object ("self"
+        in this case) has a "checks" (or "curveinterpolation", or "aggregation")
+        attribute, we can figure out what the actual subclass is.
         """
         for alternative in ("checks", "curveinterpolation", "aggregation"):
             if hasattr(self, alternative):
-                result = getattr(self, alternative)
-                if hasattr(self, "htimeseries"):
-                    result.htimeseries = self.htimeseries
-                return result
+                return getattr(self, alternative)
 
     def _get_start_date(self):
-        start_date = self._subclass.target_timeseries.end_date
+        start_date = self.target_timeseries.end_date
         if start_date:
             start_date += dt.timedelta(minutes=1)
         return start_date
 
     def save(self, *args, **kwargs):
         result = super().save(*args, **kwargs)
-        self._subclass._check_integrity()
+        self._check_integrity()
         transaction.on_commit(
             lambda: tasks.execute_auto_process.apply_async(args=[self.id])
         )
@@ -63,11 +67,11 @@ class AutoProcess(models.Model):
 
     @property
     def source_timeseries(self):
-        return self._subclass.source_timeseries
+        raise NotImplementedError("This property is available only in subclasses")
 
     @property
     def target_timeseries(self):
-        return self._subclass.target_timeseries
+        raise NotImplementedError("This property is available only in subclasses")
 
 
 class Checks(AutoProcess):

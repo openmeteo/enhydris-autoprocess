@@ -478,7 +478,7 @@ class CurvePointTestCase(TestCase):
 class CurvePeriodSetCurveTestCase(TestCase):
     def setUp(self):
         self.period = mommy.make(
-            CurvePeriod, start_date=dt.date(2019, 9, 3), end_date=dt.date(2021, 9, 4),
+            CurvePeriod, start_date=dt.date(2019, 9, 3), end_date=dt.date(2021, 9, 4)
         )
         point = CurvePoint(curve_period=self.period, x=2.718, y=3.141)
         point.save()
@@ -573,13 +573,13 @@ class AggregationTestCase(TestCase):
 
     def test_create(self):
         aggregation = Aggregation(
-            timeseries_group=self.timeseries_group, method="sum", max_missing=0,
+            timeseries_group=self.timeseries_group, method="sum", max_missing=0
         )
         aggregation.save()
         self.assertEqual(Aggregation.objects.count(), 1)
 
     def _mommy_make_aggregation(self):
-        return mommy.make(Aggregation, timeseries_group=self.timeseries_group,)
+        return mommy.make(Aggregation, timeseries_group=self.timeseries_group)
 
     def test_update(self):
         self._mommy_make_aggregation()

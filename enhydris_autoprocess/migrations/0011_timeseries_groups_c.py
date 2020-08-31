@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
             ),
             preserve_default=False,
         ),
-        migrations.RemoveField(model_name="rangecheck", name="autoprocess_ptr",),
+        migrations.RemoveField(model_name="rangecheck", name="autoprocess_ptr"),
         migrations.AlterField(
             model_name="rangecheck",
             name="checks",
@@ -41,8 +41,8 @@ class Migration(migrations.Migration):
             ),
             preserve_default=False,
         ),
-        migrations.RemoveField(model_name="autoprocess", name="source_timeseries",),
-        migrations.RemoveField(model_name="autoprocess", name="target_timeseries",),
-        migrations.RemoveField(model_name="autoprocess", name="station",),
-        migrations.RemoveField(model_name="curveinterpolation", name="name",),
+        migrations.RemoveField(model_name="autoprocess", name="source_timeseries"),
+        migrations.RemoveField(model_name="autoprocess", name="target_timeseries"),
+        migrations.RemoveField(model_name="autoprocess", name="station"),
+        migrations.RemoveField(model_name="curveinterpolation", name="name"),
     ]

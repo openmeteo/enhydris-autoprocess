@@ -240,7 +240,8 @@ class ChecksTestCase(TestCase):
         self.assertTrue(Timeseries.objects.exists())
 
     @mock.patch("enhydris_autoprocess.models.RangeCheck.check_timeseries")
-    def test_runs_range_check(self, m):
+    @mock.patch("enhydris.models.Timeseries.append_data")
+    def test_runs_range_check(self, m1, m2):
         station = mommy.make(Station)
         range_check = mommy.make(
             RangeCheck,
@@ -249,7 +250,7 @@ class ChecksTestCase(TestCase):
             checks__timeseries_group__variable__descr="Temperature",
         )
         range_check.checks.execute()
-        m.assert_called_once_with()
+        m2.assert_called_once()
 
 
 class RangeCheckTestCase(TestCase):
@@ -327,7 +328,7 @@ class RangeCheckProcessTimeseriesTestCase(TestCase):
             soft_lower_bound=3,
             soft_upper_bound=4,
         )
-        self.range_check.checks.htimeseries = HTimeseries(self.source_timeseries)
+        self.range_check.checks._htimeseries = HTimeseries(self.source_timeseries)
         result = self.range_check.checks.process_timeseries()
         pd.testing.assert_frame_equal(result, self.expected_result)
 
@@ -552,7 +553,7 @@ class CurveInterpolationProcessTimeseriesTestCase(TestCase):
         )
         self._setup_period1()
         self._setup_period2()
-        self.curve_interpolation.htimeseries = HTimeseries(self.source_timeseries)
+        self.curve_interpolation._htimeseries = HTimeseries(self.source_timeseries)
         result = self.curve_interpolation.process_timeseries()
         pd.testing.assert_frame_equal(result, self.expected_result)
 
@@ -754,8 +755,8 @@ class AggregationProcessTimeseriesTestCase(TestCase):
             max_missing=max_missing,
             resulting_timestamp_offset="1min",
         )
-        self.aggregation.htimeseries = HTimeseries(self.source_timeseries)
-        self.aggregation.htimeseries.time_step = "10min"
+        self.aggregation._htimeseries = HTimeseries(self.source_timeseries)
+        self.aggregation._htimeseries.time_step = "10min"
         return self.aggregation.process_timeseries().data
 
     def test_execute_for_max_missing_zero(self):

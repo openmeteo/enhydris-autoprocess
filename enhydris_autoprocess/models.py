@@ -75,7 +75,21 @@ class AutoProcess(models.Model):
         raise NotImplementedError("This property is available only in subclasses")
 
 
+class SelectRelatedManager(models.Manager):
+    """A manager that calls select_related().
+
+    Many models use a related object in their __str__() method. To avoid making extra
+    queries just in order to print an object, we change their default manager to this
+    one that uses select_related().
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().select_related()
+
+
 class Checks(AutoProcess):
+    objects = SelectRelatedManager()
+
     def __str__(self):
         return _("Checks for {}").format(str(self.timeseries_group))
 
@@ -110,6 +124,7 @@ class RangeCheck(models.Model):
     lower_bound = models.FloatField()
     soft_upper_bound = models.FloatField(blank=True, null=True)
     soft_lower_bound = models.FloatField(blank=True, null=True)
+    objects = SelectRelatedManager()
 
     def __str__(self):
         return _("Range check for {}").format(str(self.checks.timeseries_group))
@@ -153,6 +168,7 @@ class CurveInterpolation(AutoProcess):
     target_timeseries_group = models.ForeignKey(
         TimeseriesGroup, on_delete=models.CASCADE
     )
+    objects = SelectRelatedManager()
 
     def __str__(self):
         return f"=> {self.target_timeseries_group}"
@@ -193,6 +209,7 @@ class CurvePeriod(models.Model):
     )
     start_date = models.DateField()
     end_date = models.DateField()
+    objects = SelectRelatedManager()
 
     def __str__(self):
         return "{}: {} - {}".format(
@@ -224,6 +241,7 @@ class CurvePoint(models.Model):
     curve_period = models.ForeignKey(CurvePeriod, on_delete=models.CASCADE)
     x = models.FloatField()
     y = models.FloatField()
+    objects = SelectRelatedManager()
 
     def __str__(self):
         return _("{}: Point ({}, {})").format(str(self.curve_period), self.x, self.y)
@@ -269,6 +287,7 @@ class Aggregation(AutoProcess):
             "have finished. Leave empty to leave the timestamps alone."
         ),
     )
+    objects = SelectRelatedManager()
 
     def __str__(self):
         return _("Aggregation for {}").format(str(self.timeseries_group))

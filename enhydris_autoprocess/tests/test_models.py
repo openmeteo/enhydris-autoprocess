@@ -252,6 +252,11 @@ class ChecksTestCase(TestCase):
         range_check.checks.execute()
         m2.assert_called_once()
 
+    def test_no_extra_queries_for_str(self):
+        mommy.make(Checks, timeseries_group__variable__descr="Temperature")
+        with self.assertNumQueries(1):
+            str(Checks.objects.first())
+
 
 class RangeCheckTestCase(TestCase):
     def _mommy_make_range_check(self):
@@ -281,6 +286,11 @@ class RangeCheckTestCase(TestCase):
     def test_str(self):
         range_check = self._mommy_make_range_check()
         self.assertEqual(str(range_check), "Range check for pH")
+
+    def test_no_extra_queries_for_str(self):
+        self._mommy_make_range_check()
+        with self.assertNumQueries(1):
+            str(RangeCheck.objects.first())
 
 
 class RangeCheckProcessTimeseriesTestCase(TestCase):
@@ -372,6 +382,15 @@ class CurveInterpolationTestCase(TestCase):
         )
         self.assertEqual(str(curve_interpolation), "=> Group 2")
 
+    def test_no_extra_queries_for_str(self):
+        mommy.make(
+            CurveInterpolation,
+            timeseries_group=self.timeseries_group1,
+            target_timeseries_group=self.timeseries_group2,
+        )
+        with self.assertNumQueries(1):
+            str(CurveInterpolation.objects.first())
+
     def test_source_timeseries(self):
         self._make_timeseries(id=42, timeseries_group_num=1, type=Timeseries.RAW)
         self._make_timeseries(id=41, timeseries_group_num=2, type=Timeseries.PROCESSED)
@@ -454,6 +473,14 @@ class CurvePeriodTestCase(TestCase):
         )
         self.assertEqual(str(curve_period), "=> Discharge: 2019-09-03 - 2021-09-04")
 
+    def test_no_extra_queries_for_str(self):
+        mommy.make(
+            CurvePeriod,
+            curve_interpolation__target_timeseries_group__name="Discharge",
+        )
+        with self.assertNumQueries(1):
+            str(CurvePeriod.objects.first())
+
 
 class CurvePointTestCase(TestCase):
     def test_create(self):
@@ -488,6 +515,14 @@ class CurvePointTestCase(TestCase):
         self.assertEqual(
             str(point), "=> pH: 2019-09-03 - 2021-09-04: Point (2.178, 3.141)"
         )
+
+    def test_no_extra_queries_for_str(self):
+        mommy.make(
+            CurvePoint,
+            curve_period__curve_interpolation__target_timeseries_group__name="pH",
+        )
+        with self.assertNumQueries(1):
+            str(CurvePoint.objects.first())
 
 
 class CurvePeriodSetCurveTestCase(TestCase):
@@ -614,6 +649,11 @@ class AggregationTestCase(TestCase):
         self.assertEqual(
             str(aggregation), "Aggregation for {}".format(self.timeseries_group)
         )
+
+    def test_no_extra_queries_for_str(self):
+        self._mommy_make_aggregation()
+        with self.assertNumQueries(1):
+            str(Aggregation.objects.first())
 
     def test_wrong_resulting_timestamp_offset_1(self):
         aggregation = self._mommy_make_aggregation()

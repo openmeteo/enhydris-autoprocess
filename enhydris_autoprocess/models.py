@@ -56,14 +56,10 @@ class AutoProcess(models.Model):
 
     def save(self, *args, **kwargs):
         result = super().save(*args, **kwargs)
-        self._check_integrity()
         transaction.on_commit(
             lambda: tasks.execute_auto_process.apply_async(args=[self.id])
         )
         return result
-
-    def _check_integrity(self):
-        pass
 
     @property
     def source_timeseries(self):

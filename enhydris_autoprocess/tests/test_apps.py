@@ -4,9 +4,9 @@ from django.test import TestCase
 
 from model_mommy import mommy
 
-from enhydris.models import Station
+from enhydris.models import Station, Timeseries
 from enhydris_autoprocess import tasks
-from enhydris_autoprocess.models import AutoProcess
+from enhydris_autoprocess.models import Checks
 
 
 class EnqueueAutoProcessTestCase(TestCase):
@@ -20,10 +20,12 @@ class EnqueueAutoProcessTestCase(TestCase):
     def test_enqueues_auto_process(self):
         station = mommy.make(Station)
         auto_process = mommy.make(
-            AutoProcess,
-            station=station,
-            source_timeseries__gentity=station,
-            target_timeseries__gentity=station,
+            Checks,
+            timeseries_group__gentity=station,
+            target_timeseries_group__gentity=station,
         )
-        auto_process.source_timeseries.save()
+        timeseries = mommy.make(
+            Timeseries, timeseries_group=auto_process.timeseries_group
+        )
+        timeseries.save()
         tasks.execute_auto_process.delay.assert_any_call(auto_process.id)

@@ -3,43 +3,55 @@ import datetime as dt
 import re
 from io import StringIO
 
-from django.db import IntegrityError, models
+from django.db import IntegrityError, models, transaction
 from django.utils.translation import gettext_lazy as _
 
 import numpy as np
 import pandas as pd
 from haggregate import aggregate, regularize
 
-from enhydris.models import Station, Timeseries
+from enhydris.models import Timeseries, TimeseriesGroup
 
 from . import tasks
 
 
 class AutoProcess(models.Model):
-    station = models.ForeignKey(Station, on_delete=models.CASCADE)
-    source_timeseries = models.OneToOneField(
-        Timeseries, on_delete=models.CASCADE, related_name="auto_process"
-    )
-    target_timeseries = models.OneToOneField(
-        Timeseries, on_delete=models.CASCADE, related_name="target_timeseries_of"
-    )
+    timeseries_group = models.ForeignKey(TimeseriesGroup, on_delete=models.CASCADE)
 
     class Meta:
         verbose_name_plural = _("Auto processes")
 
     def execute(self):
-        self.htimeseries = self.source_timeseries.get_data(
-            start_date=self._get_start_date()
-        )
         result = self.process_timeseries()
         self.target_timeseries.append_data(result)
 
-    def process_timeseries(self):
-        for alternative in ("rangecheck", "curveinterpolation", "aggregation"):
+    @property
+    def htimeseries(self):
+        if not hasattr(self, "_htimeseries"):
+            self._htimeseries = self.source_timeseries.get_data(
+                start_date=self._get_start_date()
+            )
+        return self._htimeseries
+
+    @property
+    def as_specific_instance(self):
+        """Return the AutoProcess as an instance of the appropriate subclass.
+
+        AutoProcess is essentially an abstract base class; its instances are always one
+        of its subclasses, i.e. Checks, CurveInterpolation, or Aggregation. Sometimes we
+        might have an AutoProcess instance without yet knowing what subclass it is; in
+        that case, "myinstance.as_specific_instance" is the subclass.
+
+        The method works by following the reverse implied one-to-one relationships
+        created by Django when using multi-table inheritance. If auto_process is an
+        AutoProcess object and there exists a related Checks object, this is accessible
+        as auto_process.checks. So by checking whether the auto_process object ("self"
+        in this case) has a "checks" (or "curveinterpolation", or "aggregation")
+        attribute, we can figure out what the actual subclass is.
+        """
+        for alternative in ("checks", "curveinterpolation", "aggregation"):
             if hasattr(self, alternative):
-                childobj = getattr(self, alternative)
-                childobj.htimeseries = self.htimeseries
-                return childobj.process_timeseries()
+                return getattr(self, alternative)
 
     def _get_start_date(self):
         start_date = self.target_timeseries.end_date
@@ -48,72 +60,136 @@ class AutoProcess(models.Model):
         return start_date
 
     def save(self, *args, **kwargs):
-        self._check_integrity()
         result = super().save(*args, **kwargs)
-
-        # We delay running the task by one second; otherwise it may run before the
-        # current transaction has been committed.
-        tasks.execute_auto_process.apply_async(args=[self.id], countdown=1)
-
+        transaction.on_commit(
+            lambda: tasks.execute_auto_process.apply_async(args=[self.id])
+        )
         return result
 
-    def _check_integrity(self):
-        if self.source_timeseries.gentity.id != self.station.id:
-            raise IntegrityError(
-                "AutoProcess.source_timeseries must belong to AutoProcess.station"
-            )
-        if self.target_timeseries.gentity.id != self.station.id:
-            raise IntegrityError(
-                "AutoProcess.target_timeseries must belong to AutoProcess.station"
-            )
+    @property
+    def source_timeseries(self):
+        raise NotImplementedError("This property is available only in subclasses")
+
+    @property
+    def target_timeseries(self):
+        raise NotImplementedError("This property is available only in subclasses")
 
 
-class RangeCheck(AutoProcess):
+class SelectRelatedManager(models.Manager):
+    """A manager that calls select_related().
+
+    Many models use a related object in their __str__() method. To avoid making extra
+    queries just in order to print an object, we change their default manager to this
+    one that uses select_related().
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().select_related()
+
+
+class Checks(AutoProcess):
+    objects = SelectRelatedManager()
+
+    def __str__(self):
+        return _("Checks for {}").format(str(self.timeseries_group))
+
+    @property
+    def source_timeseries(self):
+        obj, created = self.timeseries_group.timeseries_set.get_or_create(
+            type=Timeseries.RAW
+        )
+        return obj
+
+    @property
+    def target_timeseries(self):
+        obj, created = self.timeseries_group.timeseries_set.get_or_create(
+            type=Timeseries.CHECKED
+        )
+        return obj
+
+    def process_timeseries(self):
+        for check_type in (RangeCheck,):
+            checked_timeseries = self.htimeseries
+            try:
+                check = check_type.objects.get(checks=self)
+                checked_timeseries = check.check_timeseries(checked_timeseries)
+            except check.DoesNotExist:
+                pass
+        return checked_timeseries.data
+
+
+class RangeCheck(models.Model):
+    checks = models.OneToOneField(Checks, on_delete=models.CASCADE, primary_key=True)
     upper_bound = models.FloatField()
     lower_bound = models.FloatField()
     soft_upper_bound = models.FloatField(blank=True, null=True)
     soft_lower_bound = models.FloatField(blank=True, null=True)
+    objects = SelectRelatedManager()
 
     def __str__(self):
-        return _("Range check for {}").format(str(self.source_timeseries))
+        return _("Range check for {}").format(str(self.checks.timeseries_group))
 
-    def process_timeseries(self):
-        self._do_hard_limits()
-        self._do_soft_limits()
-        return self.htimeseries.data
+    def check_timeseries(self, source_htimeseries):
+        result = self._do_hard_limits(source_htimeseries)
+        result = self._do_soft_limits(result)
+        return result
 
-    def _do_hard_limits(self):
-        self._find_out_of_bounds_values(self.lower_bound, self.upper_bound)
-        self._replace_out_of_bounds_values_with_nan()
-        self._add_flag_to_out_of_bounds_values("RANGE")
-        return self.htimeseries.data
+    def _do_hard_limits(self, source_htimeseries):
+        mask = self._find_out_of_bounds_values(
+            source_htimeseries, self.lower_bound, self.upper_bound
+        )
+        self._replace_out_of_bounds_values_with_nan(source_htimeseries, mask)
+        return self._add_flag_to_out_of_bounds_values(source_htimeseries, mask, "RANGE")
 
-    def _do_soft_limits(self):
-        self._find_out_of_bounds_values(self.soft_lower_bound, self.soft_upper_bound)
-        self._add_flag_to_out_of_bounds_values("SUSPECT")
+    def _do_soft_limits(self, source_htimeseries):
+        mask = self._find_out_of_bounds_values(
+            source_htimeseries, self.soft_lower_bound, self.soft_upper_bound
+        )
+        return self._add_flag_to_out_of_bounds_values(
+            source_htimeseries, mask, "SUSPECT"
+        )
 
-    def _find_out_of_bounds_values(self, low, high):
-        timeseries = self.htimeseries.data
-        self.out_of_bounds_mask = ~pd.isnull(timeseries["value"]) & ~timeseries[
-            "value"
-        ].between(low, high)
+    def _find_out_of_bounds_values(self, source_htimeseries, low, high):
+        timeseries = source_htimeseries.data
+        return ~pd.isnull(timeseries["value"]) & ~timeseries["value"].between(low, high)
 
-    def _replace_out_of_bounds_values_with_nan(self):
-        self.htimeseries.data.loc[self.out_of_bounds_mask, "value"] = np.nan
+    def _replace_out_of_bounds_values_with_nan(self, ahtimeseries, mask):
+        ahtimeseries.data.loc[mask, "value"] = np.nan
+        return ahtimeseries
 
-    def _add_flag_to_out_of_bounds_values(self, flag):
-        d = self.htimeseries.data
-        out_of_bounds_with_flags_mask = self.out_of_bounds_mask & (d["flags"] != "")
-        d.loc[out_of_bounds_with_flags_mask, "flags"] += " "
-        d.loc[self.out_of_bounds_mask, "flags"] += flag
-        return d
+    def _add_flag_to_out_of_bounds_values(self, ahtimeseries, mask, flag):
+        out_of_bounds_with_flags_mask = mask & (ahtimeseries.data["flags"] != "")
+        ahtimeseries.data.loc[out_of_bounds_with_flags_mask, "flags"] += " "
+        ahtimeseries.data.loc[mask, "flags"] += flag
+        return ahtimeseries
 
 
 class CurveInterpolation(AutoProcess):
-    name = models.CharField(max_length=200)
+    target_timeseries_group = models.ForeignKey(
+        TimeseriesGroup, on_delete=models.CASCADE
+    )
+    objects = SelectRelatedManager()
 
     def __str__(self):
-        return self.name
+        return f"=> {self.target_timeseries_group}"
+
+    @property
+    def source_timeseries(self):
+        try:
+            return self.timeseries_group.timeseries_set.get(type=Timeseries.CHECKED)
+        except Timeseries.DoesNotExist:
+            pass
+        obj, created = self.timeseries_group.timeseries_set.get_or_create(
+            type=Timeseries.RAW
+        )
+        return obj
+
+    @property
+    def target_timeseries(self):
+        obj, created = self.target_timeseries_group.timeseries_set.get_or_create(
+            type=Timeseries.PROCESSED
+        )
+        return obj
 
     def process_timeseries(self):
         timeseries = self.htimeseries.data
@@ -133,6 +209,7 @@ class CurvePeriod(models.Model):
     )
     start_date = models.DateField()
     end_date = models.DateField()
+    objects = SelectRelatedManager()
 
     def __str__(self):
         return "{}: {} - {}".format(
@@ -164,6 +241,7 @@ class CurvePoint(models.Model):
     curve_period = models.ForeignKey(CurvePeriod, on_delete=models.CASCADE)
     x = models.FloatField()
     y = models.FloatField()
+    objects = SelectRelatedManager()
 
     def __str__(self):
         return _("{}: Point ({}, {})").format(str(self.curve_period), self.x, self.y)
@@ -176,6 +254,14 @@ class Aggregation(AutoProcess):
         ("max", "Max"),
         ("min", "Min"),
     ]
+    target_time_step = models.CharField(
+        max_length=7,
+        help_text=_(
+            'E.g. "10min", "H" (hourly), "D" (daily), "M" (monthly), "Y" (yearly). '
+            "More specifically, it's an optional number plus a unit, with no space in "
+            "between. The units available are min, H, D, M, Y."
+        ),
+    )
     method = models.CharField(max_length=4, choices=METHOD_CHOICES)
     max_missing = models.PositiveSmallIntegerField(
         default=0,
@@ -201,9 +287,28 @@ class Aggregation(AutoProcess):
             "have finished. Leave empty to leave the timestamps alone."
         ),
     )
+    objects = SelectRelatedManager()
 
     def __str__(self):
-        return _("Aggregation for {}").format(str(self.source_timeseries))
+        return _("Aggregation for {}").format(str(self.timeseries_group))
+
+    @property
+    def source_timeseries(self):
+        try:
+            return self.timeseries_group.timeseries_set.get(type=Timeseries.CHECKED)
+        except Timeseries.DoesNotExist:
+            pass
+        obj, created = self.timeseries_group.timeseries_set.get_or_create(
+            type=Timeseries.RAW
+        )
+        return obj
+
+    @property
+    def target_timeseries(self):
+        obj, created = self.timeseries_group.timeseries_set.get_or_create(
+            type=Timeseries.AGGREGATED, time_step=self.target_time_step
+        )
+        return obj
 
     def save(self, force_insert=False, force_update=False, *args, **kwargs):
         self._check_resulting_timestamp_offset()
@@ -227,32 +332,31 @@ class Aggregation(AutoProcess):
 
     def process_timeseries(self):
         self.source_end_date = self.htimeseries.data.index[-1]
-        self._regularize_time_series()
-        self._aggregate_time_series()
-        self._trim_last_record_if_not_complete()
-        return self.htimeseries
+        regularized = self._regularize_time_series(self.htimeseries)
+        aggregated = self._aggregate_time_series(regularized)
+        return self._trim_last_record_if_not_complete(aggregated)
 
-    def _regularize_time_series(self):
-        self.htimeseries = regularize(self.htimeseries, new_date_flag="DATEINSERT")
+    def _regularize_time_series(self, source_htimeseries):
+        return regularize(source_htimeseries, new_date_flag="DATEINSERT")
 
-    def _aggregate_time_series(self):
-        source_step = self._get_source_step()
+    def _aggregate_time_series(self, source_htimeseries):
+        source_step = self._get_source_step(source_htimeseries)
         target_step = self._get_target_step()
         min_count = (
             self._divide_target_step_by_source_step(source_step, target_step)
             - self.max_missing
         )
         min_count = max(min_count, 1)
-        self.htimeseries = aggregate(
-            self.htimeseries,
+        return aggregate(
+            source_htimeseries,
             target_step,
             self.method,
             min_count=min_count,
             target_timestamp_offset=self.resulting_timestamp_offset or None,
         )
 
-    def _get_source_step(self):
-        return pd.infer_freq(self.htimeseries.data.index)
+    def _get_source_step(self, source_htimeseries):
+        return pd.infer_freq(source_htimeseries.data.index)
 
     def _get_target_step(self):
         result = self.target_timeseries.time_step
@@ -265,19 +369,20 @@ class Aggregation(AutoProcess):
             pd.Timedelta(target_step) / pd.tseries.frequencies.to_offset(source_step)
         )
 
-    def _trim_last_record_if_not_complete(self):
+    def _trim_last_record_if_not_complete(self, ahtimeseries):
         # If the very last record of the time series has the "MISS" flag, it means it
         # was derived with one or more missing values in the source.  We don't want to
         # leave such a record at the end of the target time series, or it won't be
         # re-calculated when more data becomes available, because processing begins at
         # the record following the last existing one.
-        if self._last_target_record_needs_trimming():
-            self.htimeseries.data = self.htimeseries.data[:-1]
+        if self._last_target_record_needs_trimming(ahtimeseries):
+            ahtimeseries.data = ahtimeseries.data[:-1]
+        return ahtimeseries
 
-    def _last_target_record_needs_trimming(self):
-        if len(self.htimeseries.data.index) == 0:
+    def _last_target_record_needs_trimming(self, ahtimeseries):
+        if len(ahtimeseries.data.index) == 0:
             return False
-        last_target_record = self.htimeseries.data.iloc[-1]
+        last_target_record = ahtimeseries.data.iloc[-1]
         last_target_record_date = last_target_record.name + pd.Timedelta(
             self.resulting_timestamp_offset
         )

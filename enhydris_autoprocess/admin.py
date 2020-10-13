@@ -6,10 +6,14 @@ from django.utils.translation import gettext_lazy as _
 
 import nested_admin
 
-from enhydris.admin.station import InlinePermissionsMixin, StationAdmin
-from enhydris.models import Timeseries
+from enhydris.admin.station import (
+    InlinePermissionsMixin,
+    StationAdmin,
+    TimeseriesGroupInline,
+)
+from enhydris.models import TimeseriesGroup
 
-from .models import Aggregation, CurveInterpolation, CurvePeriod, RangeCheck
+from .models import Aggregation, Checks, CurveInterpolation, CurvePeriod, RangeCheck
 
 # We override StationAdmin's render_change_form method in order to specify a custom
 # template. We do this in order to offer some model-wide help (help_text is only
@@ -24,51 +28,111 @@ def render_change_form(self, *args, **kwargs):
 StationAdmin.render_change_form = render_change_form
 
 
-class AutoProcessFormSet(forms.BaseInlineFormSet):
-    """Formset that passes station to the form.
+class TimeseriesGroupForm(forms.ModelForm):
+    lower_bound = forms.FloatField(required=False)
+    soft_lower_bound = forms.FloatField(required=False)
+    soft_upper_bound = forms.FloatField(required=False)
+    upper_bound = forms.FloatField(required=False)
 
-    For an explanation of why we need this formset, see
-    https://stackoverflow.com/questions/9422735/
-    """
-
-    def get_form_kwargs(self, index):
-        kwargs = super().get_form_kwargs(index)
-        kwargs["station"] = self.instance
-        return kwargs
-
-
-class AutoProcessForm(forms.ModelForm):
-    def __init__(self, *args, station, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.station = station
-        t = Timeseries.objects
-        self.fields["source_timeseries"].queryset = t.filter(gentity=self.station)
-        self.fields["target_timeseries"].queryset = t.filter(gentity=self.station)
-
-
-class RangeCheckForm(AutoProcessForm):
     class Meta:
-        model = RangeCheck
-        fields = (
-            "source_timeseries",
-            "target_timeseries",
-            "lower_bound",
-            "soft_lower_bound",
-            "soft_upper_bound",
-            "upper_bound",
+        model = TimeseriesGroup
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._populate_range_check_fields()
+
+    def _populate_range_check_fields(self):
+        if not getattr(self, "instance", None):
+            return
+        try:
+            range_check = RangeCheck.objects.get(checks__timeseries_group=self.instance)
+            self.fields["lower_bound"].initial = range_check.lower_bound
+            self.fields["soft_lower_bound"].initial = range_check.soft_lower_bound
+            self.fields["soft_upper_bound"].initial = range_check.soft_upper_bound
+            self.fields["upper_bound"].initial = range_check.upper_bound
+        except RangeCheck.DoesNotExist:
+            pass
+
+    def clean(self):
+        self._check_that_bounds_are_present_or_absent()
+        return super().clean()
+
+    def _check_that_bounds_are_present_or_absent(self):
+        hard_bounds = [
+            self.cleaned_data[x] is not None for x in ("lower_bound", "upper_bound")
+        ]
+        soft_bounds = [
+            self.cleaned_data[f"soft_{x}_bound"] is not None for x in ("lower", "upper")
+        ]
+        if all(hard_bounds) or (not any(hard_bounds) and not any(soft_bounds)):
+            return
+        raise forms.ValidationError(
+            _(
+                "To perform a range check, lower and upper bound must be specified; "
+                "otherwise, all four bounds must be empty."
+            )
+        )
+
+    def save(self, *args, **kwargs):
+        result = super().save(*args, **kwargs)
+        self._save_range_check()
+        return result
+
+    def _save_range_check(self):
+        if self.cleaned_data["lower_bound"] is None:
+            self._delete_range_check()
+        else:
+            self._create_or_update_range_check()
+
+    def _delete_range_check(self):
+        try:
+            checks = Checks.objects.get(timeseries_group=self.instance)
+            range_check = RangeCheck.objects.get(checks=checks)
+            range_check.delete()
+            # IMPORTANT: When a check besides range check is implemented, the following
+            # line must be refined.
+            checks.delete()
+        except (Checks.DoesNotExist, RangeCheck.DoesNotExist):
+            pass
+
+    def _create_or_update_range_check(self):
+        checks, created = Checks.objects.get_or_create(timeseries_group=self.instance)
+        try:
+            self._save_existing_range_check(checks)
+        except RangeCheck.DoesNotExist:
+            self._save_new_range_check(checks)
+
+    def _save_existing_range_check(self, checks):
+        range_check = RangeCheck.objects.get(checks=checks)
+        range_check.lower_bound = self.cleaned_data["lower_bound"]
+        range_check.soft_lower_bound = self.cleaned_data["soft_lower_bound"]
+        range_check.soft_upper_bound = self.cleaned_data["soft_upper_bound"]
+        range_check.upper_bound = self.cleaned_data["upper_bound"]
+        range_check.save()
+
+    def _save_new_range_check(self, checks):
+        RangeCheck.objects.create(
+            checks=checks,
+            lower_bound=self.cleaned_data["lower_bound"],
+            soft_lower_bound=self.cleaned_data["soft_lower_bound"],
+            soft_upper_bound=self.cleaned_data["soft_upper_bound"],
+            upper_bound=self.cleaned_data["upper_bound"],
         )
 
 
-class RangeCheckInline(InlinePermissionsMixin, nested_admin.NestedTabularInline):
-    model = RangeCheck
-    classes = ("collapse",)
-    formset = AutoProcessFormSet
-    form = RangeCheckForm
-    verbose_name = _("Range check")
-    verbose_name_plural = _("Range checks")
-
-
-StationAdmin.inlines.append(RangeCheckInline)
+TimeseriesGroupInline.form = TimeseriesGroupForm
+TimeseriesGroupInline.fieldsets.append(
+    (
+        _("Range check"),
+        {
+            "fields": (
+                ("lower_bound", "soft_lower_bound", "soft_upper_bound", "upper_bound"),
+            ),
+            "classes": ("collapse",),
+        },
+    ),
+)
 
 
 class CurvePeriodForm(forms.ModelForm):
@@ -120,32 +184,40 @@ class CurvePeriodInline(InlinePermissionsMixin, nested_admin.NestedTabularInline
     extra = 1
 
 
-class CurveInterpolationForm(AutoProcessForm):
+class CurveInterpolationForm(forms.ModelForm):
     class Meta:
         model = CurveInterpolation
-        fields = ("source_timeseries", "target_timeseries")
+        fields = "__all__"
 
 
 class CurveInterpolationInline(
     InlinePermissionsMixin, nested_admin.NestedTabularInline
 ):
     model = CurveInterpolation
+    fk_name = "timeseries_group"
     classes = ("collapse",)
-    formset = AutoProcessFormSet
     form = CurveInterpolationForm
     inlines = [CurvePeriodInline]
     extra = 1
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "target_timeseries_group":
+            try:
+                station_id = request.path.strip("/").split("/")[-2]
+                kwargs["queryset"] = TimeseriesGroup.objects.filter(gentity=station_id)
+            except ValueError:
+                kwargs["queryset"] = TimeseriesGroup.objects.none()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
-StationAdmin.inlines.append(CurveInterpolationInline)
+
+TimeseriesGroupInline.inlines.append(CurveInterpolationInline)
 
 
-class AggregationForm(AutoProcessForm):
+class AggregationForm(forms.ModelForm):
     class Meta:
         model = Aggregation
         fields = (
-            "source_timeseries",
-            "target_timeseries",
+            "target_time_step",
             "method",
             "max_missing",
             "resulting_timestamp_offset",
@@ -156,10 +228,10 @@ class AggregationForm(AutoProcessForm):
 class AggregationInline(InlinePermissionsMixin, nested_admin.NestedTabularInline):
     model = Aggregation
     classes = ("collapse",)
-    formset = AutoProcessFormSet
     form = AggregationForm
     verbose_name = _("Aggregation")
     verbose_name_plural = _("Aggregations")
+    extra = 1
 
 
-StationAdmin.inlines.append(AggregationInline)
+TimeseriesGroupInline.inlines.append(AggregationInline)

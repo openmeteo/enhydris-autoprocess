@@ -328,18 +328,22 @@ class CurveInterpolationInlineTargetTimeseriesGroupTestCase(TestCaseBase):
 
     def test_target_timeseries_group_dropdown_contains_options_from_station1(self):
         response = self._get_form()
-        self.assertContains(
-            response,
-            f'<option value="{self.timeseries_group.id}">myvar</option>',
-            html=True,
+        soup = BeautifulSoup(response.content.decode(), "html.parser")
+        select_id = (
+            "id_timeseriesgroup_set-1-curveinterpolation_set-0-target_timeseries_group"
+        )
+        self.assertIsNotNone(
+            soup.find(id=select_id).find("option", value=f"{self.timeseries_group.id}")
         )
 
     def test_target_timeseries_group_dropdown_not_contains_options_from_station2(self):
         response = self._get_form()
-        self.assertNotContains(
-            response,
-            f'<option value="{self.timeseries_group2.id}">myvar</option>',
-            html=True,
+        soup = BeautifulSoup(response.content.decode(), "html.parser")
+        select_id = (
+            "id_timeseriesgroup_set-1-curveinterpolation_set-0-target_timeseries_group"
+        )
+        self.assertIsNone(
+            soup.find(id=select_id).find("option", value=f"{self.timeseries_group2.id}")
         )
 
     def test_target_timeseries_group_dropdown_is_empty_when_adding_station(self):

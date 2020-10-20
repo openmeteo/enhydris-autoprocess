@@ -801,16 +801,28 @@ class AggregationProcessTimeseriesTestCase(TestCase):
 
     def test_execute_for_max_missing_zero(self):
         result = self._execute(max_missing=0)
-        pd.testing.assert_frame_equal(result, self.expected_result_for_max_missing_zero)
+        self.assert_frame_equal(result, self.expected_result_for_max_missing_zero)
 
     def test_execute_for_max_missing_one(self):
         result = self._execute(max_missing=1)
-        pd.testing.assert_frame_equal(result, self.expected_result_for_max_missing_one)
+        self.assert_frame_equal(result, self.expected_result_for_max_missing_one)
 
     def test_execute_for_max_missing_five(self):
         result = self._execute(max_missing=5)
-        pd.testing.assert_frame_equal(result, self.expected_result_for_max_missing_five)
+        self.assert_frame_equal(result, self.expected_result_for_max_missing_five)
 
     def test_execute_for_max_missing_too_high(self):
         result = self._execute(max_missing=10000)
-        pd.testing.assert_frame_equal(result, self.expected_result_for_max_missing_five)
+        self.assert_frame_equal(result, self.expected_result_for_max_missing_five)
+
+    def assert_frame_equal(self, result, expected_result):
+        """Check that DataFrames are equal, ignoring index name and frequency.
+
+        Sometimes the result's index name is "date", sometimes it's empty. Sometimes the
+        result's index frequency is "H", sometimes it's None. It must be due to
+        different dependency versions. Since the index name and frequency aren't what
+        we're trying to test here, we just ignore them.
+        """
+        expected_result.index.name = result.index.name
+        expected_result.index.freq = result.index.freq
+        pd.testing.assert_frame_equal(result, expected_result)

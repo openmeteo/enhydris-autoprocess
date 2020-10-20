@@ -3,12 +3,14 @@ import datetime as dt
 import re
 from io import StringIO
 
-from django.db import IntegrityError, models, transaction
+from django.db import DataError, IntegrityError, models, transaction
+from django.db.models.signals import post_delete
 from django.utils.translation import gettext_lazy as _
 
 import numpy as np
 import pandas as pd
 from haggregate import aggregate, regularize
+from rocc import Threshold, rocc
 
 from enhydris.models import Timeseries, TimeseriesGroup
 
@@ -87,6 +89,7 @@ class SelectRelatedManager(models.Manager):
 
 class Checks(AutoProcess):
     objects = SelectRelatedManager()
+    check_types = []
 
     def __str__(self):
         return _("Checks for {}").format(str(self.timeseries_group))
@@ -106,14 +109,22 @@ class Checks(AutoProcess):
         return obj
 
     def process_timeseries(self):
-        for check_type in (RangeCheck,):
+        for check_type in self.check_types:
             checked_timeseries = self.htimeseries
             try:
                 check = check_type.objects.get(checks=self)
                 checked_timeseries = check.check_timeseries(checked_timeseries)
-            except check.DoesNotExist:
+            except check_type.DoesNotExist:
                 pass
         return checked_timeseries.data
+
+
+def delete_checks_if_no_check(sender, instance, **kwargs):
+    checks = Checks.objects.get(pk=instance.checks.id)
+    for check_type in Checks.check_types:
+        if check_type.objects.filter(checks=checks).exists():
+            return
+    checks.delete()
 
 
 class RangeCheck(models.Model):
@@ -160,6 +171,90 @@ class RangeCheck(models.Model):
         ahtimeseries.data.loc[out_of_bounds_with_flags_mask, "flags"] += " "
         ahtimeseries.data.loc[mask, "flags"] += flag
         return ahtimeseries
+
+
+Checks.check_types.append(RangeCheck)
+post_delete.connect(delete_checks_if_no_check, sender=RangeCheck)
+
+
+class RateOfChangeCheck(models.Model):
+    checks = models.OneToOneField(Checks, on_delete=models.CASCADE, primary_key=True)
+    symmetric = models.BooleanField(
+        help_text=(
+            "If this is selected, it is the absolute value of the change that matters, "
+            "not its direction. In this case, the allowed differences must all be "
+            "positive. If it's not selected, only rates larger than a positive "
+            "or smaller than a negative difference are considered."
+        )
+    )
+    objects = SelectRelatedManager()
+
+    def __str__(self):
+        return _("Time consistency check for {}").format(
+            str(self.checks.timeseries_group)
+        )
+
+    def check_timeseries(self, source_htimeseries):
+        rocc(
+            timeseries=source_htimeseries,
+            thresholds=self.thresholds,
+            symmetric=self.symmetric,
+            flag="TEMPORAL",
+        )
+        data = source_htimeseries.data
+        data.loc[data["flags"].str.contains("TEMPORAL"), "value"] = np.nan
+        return source_htimeseries
+
+    @property
+    def thresholds(self):
+        thresholds = RateOfChangeThreshold.objects.filter(
+            rate_of_change_check=self
+        ).order_by("delta_t")
+        result = []
+        for threshold in thresholds:
+            result.append(Threshold(threshold.delta_t, threshold.allowed_diff))
+        return result
+
+    def get_thresholds_as_text(self):
+        result = ""
+        for threshold in self.thresholds:
+            result += f"{threshold.delta_t}\t{threshold.allowed_diff}\n"
+        return result
+
+    def set_thresholds(self, s):
+        self.rateofchangethreshold_set.all().delete()
+        for line in s.splitlines():
+            delta_t, allowed_diff = line.split()
+            RateOfChangeThreshold(
+                rate_of_change_check=self,
+                delta_t=delta_t,
+                allowed_diff=allowed_diff,
+            ).save()
+
+
+Checks.check_types.append(RateOfChangeCheck)
+post_delete.connect(delete_checks_if_no_check, sender=RateOfChangeCheck)
+
+
+class RateOfChangeThreshold(models.Model):
+    rate_of_change_check = models.ForeignKey(
+        RateOfChangeCheck, on_delete=models.CASCADE
+    )
+    delta_t = models.CharField(max_length=6)
+    allowed_diff = models.FloatField()
+
+    @classmethod
+    def is_delta_t_valid(cls, delta_t):
+        m = re.match(r"(\d+)(\w+)", delta_t)
+        if m is None or not int(m.group(1)) or m.group(2) not in ("min", "H", "D"):
+            return False
+        else:
+            return True
+
+    def save(self, *args, **kwargs):
+        if not self.is_delta_t_valid(self.delta_t):
+            raise DataError(f'"{ self.delta_t }" is not a valid delta_t')
+        super().save(*args, **kwargs)
 
 
 class CurveInterpolation(AutoProcess):

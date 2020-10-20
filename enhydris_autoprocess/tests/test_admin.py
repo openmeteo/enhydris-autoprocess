@@ -66,20 +66,38 @@ class TimeseriesGroupFormTestCaseBase(TestCaseBase):
             "timeseriesgroup_set-0-timeseries_set-INITIAL_FORMS": "0",
         }
 
+    def _ensure_we_have_timeseries_group(self):
+        if not hasattr(self, "timeseries_group"):
+            self.timeseries_group = mommy.make(
+                enhydris.models.TimeseriesGroup,
+                variable=self.variable,
+                gentity=self.station,
+            )
+
+    def _ensure_we_have_checks(self):
+        self._ensure_we_have_timeseries_group()
+        if not hasattr(self, "checks"):
+            self.checks = mommy.make(
+                models.Checks, timeseries_group=self.timeseries_group
+            )
+
     def _create_range_check(self):
-        self.timeseries_group = mommy.make(
-            enhydris.models.TimeseriesGroup,
-            variable=self.variable,
-            gentity=self.station,
-        )
+        self._ensure_we_have_checks()
         self.range_check = mommy.make(
             models.RangeCheck,
-            checks__timeseries_group=self.timeseries_group,
+            checks=self.checks,
             lower_bound=1,
             soft_lower_bound=2,
             soft_upper_bound=3,
             upper_bound=4,
         )
+
+    def _create_roc_check(self):
+        self._ensure_we_have_checks()
+        self.roc_check = mommy.make(
+            models.RateOfChangeCheck, checks=self.checks, symmetric=True
+        )
+        self.roc_check.set_thresholds("10min\t25.0\n1H\t35.0\n")
 
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
@@ -175,6 +193,7 @@ class TimeseriesGroupFormDeletesRangeCheckTestCase(TimeseriesGroupFormTestCaseBa
     def setUp(self):
         self._create_data()
         self._create_range_check()
+        self._create_roc_check()  # This is to ensure it won't be deleted
         assert models.RangeCheck.objects.count() == 1
         assert models.Checks.objects.count() == 1
         self._get_response()
@@ -194,9 +213,6 @@ class TimeseriesGroupFormDeletesRangeCheckTestCase(TimeseriesGroupFormTestCaseBa
 
     def test_range_check_has_been_deleted(self):
         self.assertEqual(models.RangeCheck.objects.count(), 0)
-
-    def test_checks_has_been_deleted(self):
-        self.assertEqual(models.Checks.objects.count(), 0)
 
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
@@ -227,6 +243,120 @@ class TimeseriesGroupFormRangeCheckInitialValuesTestCase(
     def test_upper_bound(self):
         value = self.soup.find(id="id_timeseriesgroup_set-0-upper_bound")["value"]
         self.assertEqual(value, "4.0")
+
+
+@override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
+class TimeseriesGroupFormRocCheckValidationTestCase(TimeseriesGroupFormTestCaseBase):
+    def setUp(self):
+        self._create_data()
+        self.data = self._get_basic_form_contents()
+
+    def test_returns_error_if_thresholds_is_garbage(self):
+        data = {**self.data, "timeseriesgroup_set-0-rocc_thresholds": "garbage"}
+        response = self._post_form(data)
+        self.assertContains(response, "is not a valid (delta_t, allowed_diff) pair")
+
+    def test_succeeds_if_thresholds_is_ok(self):
+        data = {**self.data, "timeseriesgroup_set-0-rocc_thresholds": "10min 25.0"}
+        response = self._post_form(data)
+        self.assertEqual(response.status_code, 302)
+
+    def test_succeeds_if_thresholds_is_unspecified(self):
+        data = {**self.data, "timeseriesgroup_set-0-rocc_thresholds": ""}
+        response = self._post_form(data)
+        self.assertEqual(response.status_code, 302)
+
+
+@override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
+class TimeseriesGroupFormCreatesRocCheckTestCase(TimeseriesGroupFormTestCaseBase):
+    def setUp(self):
+        self._create_data()
+        self._get_response()
+        self.roc_check = models.RateOfChangeCheck.objects.first()
+
+    def _get_response(self):
+        data = {
+            **self._get_basic_form_contents(),
+            "timeseriesgroup_set-0-rocc_symmetric": True,
+            "timeseriesgroup_set-0-rocc_thresholds": "10min 25.0\n1H 35",
+        }
+        response = self._post_form(data)
+        assert response.status_code == 302
+
+    def test_thresholds(self):
+        self.assertEqual(
+            self.roc_check.get_thresholds_as_text(),
+            "10min\t25.0\n1H\t35.0\n",
+        )
+
+
+@override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
+class TimeseriesGroupFormSavesExistingRocCheckTestCase(
+    TimeseriesGroupFormCreatesRocCheckTestCase
+):
+    def setUp(self):
+        self._create_data()
+        self._create_roc_check()
+        self._get_response()
+        roc_checks = models.RateOfChangeCheck.objects.all()
+        assert roc_checks.count() == 1
+        self.roc_check = roc_checks[0]
+
+    def _get_response(self):
+        data = {
+            **self._get_basic_form_contents(),
+            "timeseriesgroup_set-0-id": self.timeseries_group.id,
+            "timeseriesgroup_set-0-gentity": self.station.id,
+            "timeseriesgroup_set-0-rocc_symmetric": True,
+            "timeseriesgroup_set-0-rocc_thresholds": "10min 25.0\n1H 35",
+        }
+        response = self._post_form(data)
+        assert response.status_code == 302
+
+
+@override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
+class TimeseriesGroupFormDeletesRocCheckTestCase(TimeseriesGroupFormTestCaseBase):
+    def setUp(self):
+        self._create_data()
+        self._create_roc_check()
+        self._create_range_check()  # This is to ensure it's not deleted
+        assert models.RateOfChangeCheck.objects.count() == 1
+        assert models.Checks.objects.count() == 1
+        self._get_response()
+
+    def _get_response(self):
+        data = {
+            **self._get_basic_form_contents(),
+            "timeseriesgroup_set-0-id": self.timeseries_group.id,
+            "timeseriesgroup_set-0-gentity": self.station.id,
+            "timeseriesgroup_set-0-lower_bound": "3",
+            "timeseriesgroup_set-0-soft_lower_bound": "4",
+            "timeseriesgroup_set-0-soft_upper_bound": "5",
+            "timeseriesgroup_set-0-upper_bound": "6",
+            "timeseriesgroup_set-0-rocc_symmetric": True,
+            "timeseriesgroup_set-0-rocc_thresholds": "",
+        }
+        response = self._post_form(data)
+        assert response.status_code == 302
+
+    def test_roc_check_has_been_deleted(self):
+        self.assertEqual(models.RateOfChangeCheck.objects.count(), 0)
+
+
+@override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
+class TimeseriesGroupFormRocCheckInitialValuesTestCase(TimeseriesGroupFormTestCaseBase):
+    def setUp(self):
+        self._create_data()
+        self._create_roc_check()
+        self._get_response()
+
+    def _get_response(self):
+        self.response = self._get_form()
+        self.soup = BeautifulSoup(self.response.content, "html.parser")
+
+    def test_thresholds(self):
+        value = self.soup.find(id="id_timeseriesgroup_set-0-rocc_thresholds").text
+        self.assertEqual(value.strip(), "10min\t25.0\n1H\t35.0")
 
 
 class CurvePeriodFormTestCase(TestCase):

@@ -2,13 +2,14 @@ import datetime as dt
 import textwrap
 from unittest import mock
 
-from django.db import IntegrityError, transaction
+from django.db import DataError, IntegrityError, transaction
 from django.test import TestCase, TransactionTestCase
 
 import numpy as np
 import pandas as pd
 from htimeseries import HTimeseries
 from model_mommy import mommy
+from rocc import Threshold
 
 from enhydris.models import Station, Timeseries, TimeseriesGroup, Variable
 from enhydris_autoprocess import tasks
@@ -20,6 +21,8 @@ from enhydris_autoprocess.models import (
     CurvePeriod,
     CurvePoint,
     RangeCheck,
+    RateOfChangeCheck,
+    RateOfChangeThreshold,
 )
 
 
@@ -258,6 +261,31 @@ class ChecksTestCase(TestCase):
             str(Checks.objects.first())
 
 
+class ChecksAutoDeletionTestCase(TestCase):
+    def setUp(self):
+        self.checks = mommy.make(Checks, timeseries_group__variable__descr="pH")
+        self.range_check = mommy.make(RangeCheck, checks=self.checks)
+        self.roc_check = mommy.make(RateOfChangeCheck, checks=self.checks)
+
+    def test_checks_is_not_deleted_if_range_check_is_deleted(self):
+        self.range_check.delete()
+        self.assertTrue(Checks.objects.exists())
+
+    def test_checks_is_not_deleted_if_roc_check_is_deleted(self):
+        self.roc_check.delete()
+        self.assertTrue(Checks.objects.exists())
+
+    def test_checks_is_deleted_if_both_checks_are_deleted_with_roc_last(self):
+        self.range_check.delete()
+        self.roc_check.delete()
+        self.assertFalse(Checks.objects.exists())
+
+    def test_checks_is_deleted_if_both_checks_are_deleted_with_range_last(self):
+        self.roc_check.delete()
+        self.range_check.delete()
+        self.assertFalse(Checks.objects.exists())
+
+
 class RangeCheckTestCase(TestCase):
     def _mommy_make_range_check(self):
         return mommy.make(
@@ -340,6 +368,140 @@ class RangeCheckProcessTimeseriesTestCase(TestCase):
         )
         self.range_check.checks._htimeseries = HTimeseries(self.source_timeseries)
         result = self.range_check.checks.process_timeseries()
+        pd.testing.assert_frame_equal(result, self.expected_result)
+
+
+class RateOfChangeCheckTestCase(TestCase):
+    def _mommy_make_rate_of_change_check(self):
+        return mommy.make(
+            RateOfChangeCheck, checks__timeseries_group__name="pH", symmetric=True
+        )
+
+    def test_create_roc_check(self):
+        checks = mommy.make(Checks)
+        roc_check = RateOfChangeCheck(checks=checks, symmetric=True)
+        roc_check.save()
+        self.assertEqual(RateOfChangeCheck.objects.count(), 1)
+
+    def test_create_thresholds(self):
+        roc_check = self._mommy_make_rate_of_change_check()
+        threshold = RateOfChangeThreshold(
+            rate_of_change_check=roc_check, delta_t="10min", allowed_diff=25.0
+        )
+        threshold.save()
+        self.assertEqual(RateOfChangeThreshold.objects.count(), 1)
+
+    def test_raises_data_error_if_invalid_delta_t(self):
+        roc_check = self._mommy_make_rate_of_change_check()
+        threshold = RateOfChangeThreshold(
+            rate_of_change_check=roc_check, delta_t="garbag", allowed_diff=25.0
+        )
+        msg = '"garbag" is not a valid delta_t'
+        with self.assertRaisesRegex(DataError, msg):
+            threshold.save()
+
+    def test_garbage_delta_t_is_invalid(self):
+        self.assertFalse(RateOfChangeThreshold.is_delta_t_valid("garbge"))
+
+    def test_zero_delta_t_is_invalid(self):
+        self.assertFalse(RateOfChangeThreshold.is_delta_t_valid("0min"))
+
+    def test_delta_t_with_invalid_unit_of_measurement_is_invalid(self):
+        self.assertFalse(RateOfChangeThreshold.is_delta_t_valid("2garbg"))
+
+    def test_delta_t_with_minutes(self):
+        self.assertTrue(RateOfChangeThreshold.is_delta_t_valid("1min"))
+
+    def test_delta_t_with_hours(self):
+        self.assertTrue(RateOfChangeThreshold.is_delta_t_valid("2H"))
+
+    def test_delta_t_with_days(self):
+        self.assertTrue(RateOfChangeThreshold.is_delta_t_valid("3D"))
+
+    def test_str(self):
+        roc_check = self._mommy_make_rate_of_change_check()
+        self.assertEqual(str(roc_check), "Time consistency check for pH")
+
+    def test_no_extra_queries_for_str(self):
+        self._mommy_make_rate_of_change_check()
+        with self.assertNumQueries(1):
+            str(RateOfChangeCheck.objects.first())
+
+
+class RateOfChangeCheckThresholdsTestCase(TestCase):
+    def setUp(self):
+        self.rocc = mommy.make(
+            RateOfChangeCheck, checks__timeseries_group__name="pH", symmetric=True
+        )
+
+    def test_get_thresholds_as_text(self):
+        mommy.make(
+            RateOfChangeThreshold,
+            rate_of_change_check=self.rocc,
+            delta_t="10min",
+            allowed_diff=25.0,
+        )
+        mommy.make(
+            RateOfChangeThreshold,
+            rate_of_change_check=self.rocc,
+            delta_t="1H",
+            allowed_diff=35.0,
+        )
+        self.assertEqual(self.rocc.get_thresholds_as_text(), "10min\t25.0\n1H\t35.0\n")
+
+    def test_set_thresholds(self):
+        self.rocc.set_thresholds("10min\t25.0\n1H\t35.0\n")
+        self.assertEqual(
+            self.rocc.thresholds, [Threshold("10min", 25.0), Threshold("1H", 35.0)]
+        )
+
+    def test_set_thresholds_when_some_already_exist(self):
+        self.rocc.set_thresholds("5min\t25.0\n2H\t35.0\n")
+        self.rocc.set_thresholds("10min\t25.0\n1H\t35.0\n")
+        self.assertEqual(
+            self.rocc.thresholds, [Threshold("10min", 25.0), Threshold("1H", 35.0)]
+        )
+
+
+class RateOfChangeCheckProcessTimeseriesTestCase(TestCase):
+    _index = [
+        dt.datetime(2019, 5, 21, 10, 20),
+        dt.datetime(2019, 5, 21, 10, 30),
+        dt.datetime(2019, 5, 21, 10, 40),
+        dt.datetime(2019, 5, 21, 10, 50),
+        dt.datetime(2019, 5, 21, 11, 00),
+        dt.datetime(2019, 5, 21, 11, 10),
+        dt.datetime(2019, 5, 21, 11, 20),
+    ]
+
+    source_timeseries = pd.DataFrame(
+        data={
+            "value": [1.5, 8.9, 3.1, np.nan, 3.8, 11.9, 7.2],
+            "flags": ["", "", "", "", "FLAG1", "FLAG2", "FLAG3"],
+        },
+        columns=["value", "flags"],
+        index=_index,
+    )
+
+    expected_result = pd.DataFrame(
+        data={
+            "value": [1.5, np.nan, 3.1, np.nan, 3.8, np.nan, 7.2],
+            "flags": ["", "TEMPORAL", "", "", "FLAG1", "FLAG2 TEMPORAL", "FLAG3"],
+        },
+        columns=["value", "flags"],
+        index=_index,
+    )
+
+    def test_execute(self):
+        self.roc_check = mommy.make(RateOfChangeCheck)
+        mommy.make(
+            RateOfChangeThreshold,
+            rate_of_change_check=self.roc_check,
+            delta_t="10min",
+            allowed_diff=7.0,
+        )
+        self.roc_check.checks._htimeseries = HTimeseries(self.source_timeseries)
+        result = self.roc_check.checks.process_timeseries()
         pd.testing.assert_frame_equal(result, self.expected_result)
 
 

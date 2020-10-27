@@ -61,9 +61,7 @@ class AutoProcess(models.Model):
 
     def save(self, *args, **kwargs):
         result = super().save(*args, **kwargs)
-        transaction.on_commit(
-            lambda: tasks.execute_auto_process.apply_async(args=[self.id])
-        )
+        transaction.on_commit(lambda: tasks.execute_auto_process.delay(self.id))
         return result
 
     @property

@@ -71,13 +71,13 @@ class AutoProcessSaveTestCase(TransactionTestCase):
         with transaction.atomic():
             auto_process = mommy.make(Checks, timeseries_group=self.timeseries_group)
             auto_process.save()
-        tasks.execute_auto_process.apply_async.assert_any_call(args=[auto_process.id])
+        tasks.execute_auto_process.delay.assert_any_call(auto_process.id)
 
     def test_auto_process_is_not_triggered_before_commit(self):
         with transaction.atomic():
             auto_process = mommy.make(Checks, timeseries_group=self.timeseries_group)
             auto_process.save()
-            tasks.execute_auto_process.apply_async.assert_not_called()
+            tasks.execute_auto_process.delay.assert_not_called()
 
 
 class AutoProcessExecuteTestCase(TestCase):

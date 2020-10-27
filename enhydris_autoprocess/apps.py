@@ -1,7 +1,8 @@
 from django.apps import AppConfig
+from django.db import transaction
 from django.db.models.signals import post_save
 
-from . import tasks
+from .tasks import execute_auto_process
 
 
 def enqueue_auto_process(sender, *, instance, **kwargs):
@@ -11,7 +12,7 @@ def enqueue_auto_process(sender, *, instance, **kwargs):
         if auto_process.as_specific_instance.source_timeseries == instance
     ]
     for auto_process in auto_processes:
-        tasks.execute_auto_process.delay(auto_process.id)
+        transaction.on_commit(lambda: execute_auto_process.delay(auto_process.id))
 
 
 class AutoprocessConfig(AppConfig):

@@ -13,7 +13,15 @@ from enhydris.admin.station import (
 )
 from enhydris.models import TimeseriesGroup
 
-from .models import Aggregation, Checks, CurveInterpolation, CurvePeriod, RangeCheck
+from .models import (
+    Aggregation,
+    Checks,
+    CurveInterpolation,
+    CurvePeriod,
+    RangeCheck,
+    RateOfChangeCheck,
+    RateOfChangeThreshold,
+)
 
 # We override StationAdmin's render_change_form method in order to specify a custom
 # template. We do this in order to offer some model-wide help (help_text is only
@@ -33,6 +41,23 @@ class TimeseriesGroupForm(forms.ModelForm):
     soft_lower_bound = forms.FloatField(required=False)
     soft_upper_bound = forms.FloatField(required=False)
     upper_bound = forms.FloatField(required=False)
+    rocc_thresholds = forms.CharField(
+        required=False,
+        widget=forms.Textarea,
+        label=_("Thresholds"),
+        help_text=(
+            'The allowed differences, one per line, like "10min 7.3". This example '
+            "means that any change higher than 7.3 within 10 minutes will be "
+            "considered an error. The time length is specified as an optional number "
+            "plus a unit, with no space in between. The units available are min "
+            "(minutes), H (hours) and D (days)."
+        ),
+    )
+    rocc_symmetric = forms.BooleanField(
+        required=False,
+        label=_("Symmetric"),
+        help_text=RateOfChangeCheck._meta.get_field("symmetric").help_text,
+    )
 
     class Meta:
         model = TimeseriesGroup
@@ -40,30 +65,48 @@ class TimeseriesGroupForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._populate_range_check_fields()
+        self.range_check_subform = _RangeCheckSubform(self)
+        self.roc_check_subform = _RocCheckSubform(self)
 
-    def _populate_range_check_fields(self):
-        if not getattr(self, "instance", None):
+    def clean(self):
+        self.range_check_subform.check_that_bounds_are_present_or_absent()
+        return super().clean()
+
+    def clean_rocc_thresholds(self):
+        return self.roc_check_subform.clean_rocc_thresholds()
+
+    def save(self, *args, **kwargs):
+        result = super().save(*args, **kwargs)
+        self.range_check_subform.save()
+        self.roc_check_subform.save()
+        return result
+
+
+class _RangeCheckSubform:
+    def __init__(self, parent_form):
+        self.parent_form = parent_form
+        self._populate_fields()
+
+    def _populate_fields(self):
+        if not getattr(self.parent_form, "instance", None):
             return
         try:
-            range_check = RangeCheck.objects.get(checks__timeseries_group=self.instance)
-            self.fields["lower_bound"].initial = range_check.lower_bound
-            self.fields["soft_lower_bound"].initial = range_check.soft_lower_bound
-            self.fields["soft_upper_bound"].initial = range_check.soft_upper_bound
-            self.fields["upper_bound"].initial = range_check.upper_bound
+            pf = self.parent_form
+            range_check = RangeCheck.objects.get(checks__timeseries_group=pf.instance)
+            pf.fields["lower_bound"].initial = range_check.lower_bound
+            pf.fields["soft_lower_bound"].initial = range_check.soft_lower_bound
+            pf.fields["soft_upper_bound"].initial = range_check.soft_upper_bound
+            pf.fields["upper_bound"].initial = range_check.upper_bound
         except RangeCheck.DoesNotExist:
             pass
 
-    def clean(self):
-        self._check_that_bounds_are_present_or_absent()
-        return super().clean()
-
-    def _check_that_bounds_are_present_or_absent(self):
+    def check_that_bounds_are_present_or_absent(self):
+        pf = self.parent_form
         hard_bounds = [
-            self.cleaned_data[x] is not None for x in ("lower_bound", "upper_bound")
+            pf.cleaned_data[x] is not None for x in ("lower_bound", "upper_bound")
         ]
         soft_bounds = [
-            self.cleaned_data[f"soft_{x}_bound"] is not None for x in ("lower", "upper")
+            pf.cleaned_data[f"soft_{x}_bound"] is not None for x in ("lower", "upper")
         ]
         if all(hard_bounds) or (not any(hard_bounds) and not any(soft_bounds)):
             return
@@ -74,30 +117,24 @@ class TimeseriesGroupForm(forms.ModelForm):
             )
         )
 
-    def save(self, *args, **kwargs):
-        result = super().save(*args, **kwargs)
-        self._save_range_check()
-        return result
-
-    def _save_range_check(self):
-        if self.cleaned_data["lower_bound"] is None:
+    def save(self):
+        if self.parent_form.cleaned_data["lower_bound"] is None:
             self._delete_range_check()
         else:
             self._create_or_update_range_check()
 
     def _delete_range_check(self):
         try:
-            checks = Checks.objects.get(timeseries_group=self.instance)
+            checks = Checks.objects.get(timeseries_group=self.parent_form.instance)
             range_check = RangeCheck.objects.get(checks=checks)
             range_check.delete()
-            # IMPORTANT: When a check besides range check is implemented, the following
-            # line must be refined.
-            checks.delete()
         except (Checks.DoesNotExist, RangeCheck.DoesNotExist):
             pass
 
     def _create_or_update_range_check(self):
-        checks, created = Checks.objects.get_or_create(timeseries_group=self.instance)
+        checks, created = Checks.objects.get_or_create(
+            timeseries_group=self.parent_form.instance
+        )
         try:
             self._save_existing_range_check(checks)
         except RangeCheck.DoesNotExist:
@@ -105,19 +142,90 @@ class TimeseriesGroupForm(forms.ModelForm):
 
     def _save_existing_range_check(self, checks):
         range_check = RangeCheck.objects.get(checks=checks)
-        range_check.lower_bound = self.cleaned_data["lower_bound"]
-        range_check.soft_lower_bound = self.cleaned_data["soft_lower_bound"]
-        range_check.soft_upper_bound = self.cleaned_data["soft_upper_bound"]
-        range_check.upper_bound = self.cleaned_data["upper_bound"]
+        range_check.lower_bound = self.parent_form.cleaned_data["lower_bound"]
+        range_check.soft_lower_bound = self.parent_form.cleaned_data["soft_lower_bound"]
+        range_check.soft_upper_bound = self.parent_form.cleaned_data["soft_upper_bound"]
+        range_check.upper_bound = self.parent_form.cleaned_data["upper_bound"]
         range_check.save()
 
     def _save_new_range_check(self, checks):
         RangeCheck.objects.create(
             checks=checks,
-            lower_bound=self.cleaned_data["lower_bound"],
-            soft_lower_bound=self.cleaned_data["soft_lower_bound"],
-            soft_upper_bound=self.cleaned_data["soft_upper_bound"],
-            upper_bound=self.cleaned_data["upper_bound"],
+            lower_bound=self.parent_form.cleaned_data["lower_bound"],
+            soft_lower_bound=self.parent_form.cleaned_data["soft_lower_bound"],
+            soft_upper_bound=self.parent_form.cleaned_data["soft_upper_bound"],
+            upper_bound=self.parent_form.cleaned_data["upper_bound"],
+        )
+
+
+class _RocCheckSubform:
+    def __init__(self, parent_form):
+        self.parent_form = parent_form
+        self._populate_fields()
+
+    def _populate_fields(self):
+        if not getattr(self.parent_form, "instance", None):
+            return
+        try:
+            pf = self.parent_form
+            roc_check = RateOfChangeCheck.objects.get(
+                checks__timeseries_group=pf.instance
+            )
+            pf.fields["rocc_symmetric"].initial = roc_check.symmetric
+            pf.fields["rocc_thresholds"].initial = roc_check.get_thresholds_as_text()
+        except RateOfChangeCheck.DoesNotExist:
+            pass
+
+    def clean_rocc_thresholds(self):
+        data = self.parent_form.cleaned_data["rocc_thresholds"]
+        for line in data.splitlines():
+            self._check_thresholds_line(line)
+        return data
+
+    def _check_thresholds_line(self, line):
+        try:
+            delta_t, allowed_diff = line.split()
+            float(allowed_diff)  # Raise ValueError if problem
+            if not RateOfChangeThreshold.is_delta_t_valid(delta_t):
+                raise ValueError()
+        except ValueError:
+            raise forms.ValidationError(
+                _(f'"{line}" is not a valid (delta_t, allowed_diff) pair')
+            )
+
+    def save(self):
+        if not self.parent_form.cleaned_data["rocc_thresholds"]:
+            self._delete_roc_check()
+        else:
+            self._create_or_update_roc_check()
+
+    def _delete_roc_check(self):
+        try:
+            checks = Checks.objects.get(timeseries_group=self.parent_form.instance)
+            roc_check = RateOfChangeCheck.objects.get(checks=checks)
+            roc_check.delete()
+        except (Checks.DoesNotExist, RateOfChangeCheck.DoesNotExist):
+            pass
+
+    def _create_or_update_roc_check(self):
+        checks, created = Checks.objects.get_or_create(
+            timeseries_group=self.parent_form.instance
+        )
+        try:
+            rocc_check = self._save_existing_roc_check(checks)
+        except RateOfChangeCheck.DoesNotExist:
+            rocc_check = self._save_new_roc_check(checks)
+        rocc_check.set_thresholds(self.parent_form.cleaned_data["rocc_thresholds"])
+
+    def _save_existing_roc_check(self, checks):
+        rocc_check = RateOfChangeCheck.objects.get(checks=checks)
+        rocc_check.symmetric = self.parent_form.cleaned_data["rocc_symmetric"]
+        rocc_check.save()
+        return rocc_check
+
+    def _save_new_roc_check(self, checks):
+        return RateOfChangeCheck.objects.create(
+            checks=checks, symmetric=self.parent_form.cleaned_data["rocc_symmetric"]
         )
 
 
@@ -129,6 +237,15 @@ TimeseriesGroupInline.fieldsets.append(
             "fields": (
                 ("lower_bound", "soft_lower_bound", "soft_upper_bound", "upper_bound"),
             ),
+            "classes": ("collapse",),
+        },
+    ),
+)
+TimeseriesGroupInline.fieldsets.append(
+    (
+        _("Time consistency check"),
+        {
+            "fields": (("rocc_thresholds", "rocc_symmetric"),),
             "classes": ("collapse",),
         },
     ),

@@ -235,7 +235,10 @@ TimeseriesGroupInline.fieldsets.append(
         _("Range check"),
         {
             "fields": (
-                ("lower_bound", "soft_lower_bound", "soft_upper_bound", "upper_bound"),
+                "lower_bound",
+                "soft_lower_bound",
+                "soft_upper_bound",
+                "upper_bound",
             ),
             "classes": ("collapse",),
         },

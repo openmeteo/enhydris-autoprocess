@@ -180,7 +180,7 @@ post_delete.connect(delete_checks_if_no_check, sender=RangeCheck)
 class RateOfChangeCheck(models.Model):
     checks = models.OneToOneField(Checks, on_delete=models.CASCADE, primary_key=True)
     symmetric = models.BooleanField(
-        help_text=(
+        help_text=_(
             "If this is selected, it is the absolute value of the change that matters, "
             "not its direction. In this case, the allowed differences must all be "
             "positive. If it's not selected, only rates larger than a positive "
@@ -358,7 +358,7 @@ class Aggregation(AutoProcess):
     method = models.CharField(max_length=4, choices=METHOD_CHOICES)
     max_missing = models.PositiveSmallIntegerField(
         default=0,
-        help_text=(
+        help_text=_(
             "Defines what happens if some of the source records corresponding to a "
             "destination record are missing. Suppose you are aggregating ten-minute "
             "to hourly and for 23 January between 12:00 and 13:00 there are only "
@@ -372,7 +372,7 @@ class Aggregation(AutoProcess):
     resulting_timestamp_offset = models.CharField(
         max_length=7,
         blank=True,
-        help_text=(
+        help_text=_(
             'If the time step of the target time series is one day ("D") and you set '
             'the resulting timestamp offset to "1min", the resulting time stamps will '
             "be ending in 23:59.  This does not modify the calculations; it only "

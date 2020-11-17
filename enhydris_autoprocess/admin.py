@@ -45,7 +45,7 @@ class TimeseriesGroupForm(forms.ModelForm):
         required=False,
         widget=forms.Textarea,
         label=_("Thresholds"),
-        help_text=(
+        help_text=_(
             'The allowed differences, one per line, like "10min 7.3". This example '
             "means that any change higher than 7.3 within 10 minutes will be "
             "considered an error. The time length is specified as an optional number "
@@ -258,7 +258,7 @@ TimeseriesGroupInline.fieldsets.append(
 class CurvePeriodForm(forms.ModelForm):
     points = forms.CharField(
         widget=forms.Textarea,
-        help_text=(
+        help_text=_(
             "The points that form the curve. You can copy/paste them from a "
             "spreadsheet, two columns: X and Y. Copy and paste the points only, "
             "without headings. If you key them in instead, they must be one point "

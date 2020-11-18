@@ -856,8 +856,14 @@ class AggregationTestCase(TestCase):
         aggregation.resulting_timestamp_offset = "-1min"
         aggregation.save()
 
-    def test_source_timeseries(self):
+    def test_source_timeseries_when_raw_already_exists(self):
         self._make_timeseries(id=42, type=Timeseries.RAW)
+        self._make_timeseries(id=41, type=Timeseries.AGGREGATED)
+        aggregation = mommy.make(Aggregation, timeseries_group=self.timeseries_group)
+        self.assertEqual(aggregation.source_timeseries.id, 42)
+
+    def test_source_timeseries_when_processed_already_exists(self):
+        self._make_timeseries(id=42, type=Timeseries.PROCESSED)
         self._make_timeseries(id=41, type=Timeseries.AGGREGATED)
         aggregation = mommy.make(Aggregation, timeseries_group=self.timeseries_group)
         self.assertEqual(aggregation.source_timeseries.id, 42)

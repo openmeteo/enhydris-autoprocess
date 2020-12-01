@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2020-11-17 09:57-0600\n"
+"POT-Creation-Date: 2020-12-01 04:50-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,6 +17,22 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: admin.py:40 models.py:133
+msgid "Lower bound"
+msgstr "Απόλυτο κάτω όριο"
+
+#: admin.py:41 models.py:138
+msgid "Soft lower bound"
+msgstr "Κάτω όριο (για ύποπτες τιμές)"
+
+#: admin.py:42 models.py:135
+msgid "Soft upper bound"
+msgstr "Άνω όριο (για ύποπτες τιμές)"
+
+#: admin.py:43 models.py:132
+msgid "Upper bound"
+msgstr "Απόλυτο άνω όριο"
 
 #: admin.py:47
 msgid "Thresholds"
@@ -31,12 +47,12 @@ msgid ""
 "and D (days)."
 msgstr ""
 "Οι επιτρεπόμενες διαφορές, μία σε κάθε γραμμή, π.χ. «10min 7.3». Αυτό το "
-"παράδειγμα σημαίνει πως οποιαδήποτε διαφορά μεγαλύτερη από 7.3 εντός 10 λεπτών "
-"θα θεωρηθεί σφάλμα. Το χρονικό διάστημα ορίζεται ως προαιρετικός αριθμός και "
-"μονάδα, χωρίς διάστημα μεταξύ τους. Οι μονάδες είναι min (λεπτά), H (ώρες) "
-"και D (μέρες)."
+"παράδειγμα σημαίνει πως οποιαδήποτε διαφορά μεγαλύτερη από 7.3 εντός 10 "
+"λεπτών θα θεωρηθεί σφάλμα. Το χρονικό διάστημα ορίζεται ως προαιρετικός "
+"αριθμός και μονάδα, χωρίς διάστημα μεταξύ τους. Οι μονάδες είναι min "
+"(λεπτά), H (ώρες) και D (μέρες)."
 
-#: admin.py:58
+#: admin.py:58 models.py:197
 msgid "Symmetric"
 msgstr "Συμμετρικό"
 
@@ -53,11 +69,11 @@ msgstr ""
 msgid "\"{line}\" is not a valid (delta_t, allowed_diff) pair"
 msgstr "Το «{line}» δεν είναι έγκυρο ζεύγος (delta_t, allowed_diff)"
 
-#: admin.py:235
+#: admin.py:235 models.py:143
 msgid "Range check"
 msgstr "Έλεγχος ακραίων τιμών"
 
-#: admin.py:249
+#: admin.py:249 models.py:202
 msgid "Time consistency check"
 msgstr "Έλεγχος χρονικής συνέπειας"
 
@@ -70,15 +86,19 @@ msgid ""
 msgstr ""
 "Τα σημεία που αποτελούν την καμπύλη. Μπορείτε να τα αντιγράψετε από φύλλο "
 "εργασίας, σε δύο στήλες: X και Y. Αντιγράψτε τα σημεία μόνο, χωρίς "
-"επικεφαλίδες. Αν αντ' αυτού θέλετε να τα πληκτρολογήσετε, πρέπει να "
-"είναι ένα σημείο σε κάθε γραμμή, πρώτα το X και μετά το Υ, διαχωρισμένα με "
-"tab ή κόμμα."
+"επικεφαλίδες. Αν αντ' αυτού θέλετε να τα πληκτρολογήσετε, πρέπει να είναι "
+"ένα σημείο σε κάθε γραμμή, πρώτα το X και μετά το Υ, διαχωρισμένα με tab ή "
+"κόμμα."
 
-#: admin.py:352
+#: admin.py:267
+msgid "Points"
+msgstr "Σημεία"
+
+#: admin.py:353 models.py:414
 msgid "Aggregation"
 msgstr "Συνάθροιση"
 
-#: admin.py:353
+#: admin.py:354 models.py:415
 msgid "Aggregations"
 msgstr "Συναθροίσεις"
 
@@ -90,11 +110,15 @@ msgstr "Αυτόματες επεξεργασίες"
 msgid "Checks for {}"
 msgstr "Έλεγχοι για τη χρονοσειρά «{}»"
 
-#: models.py:139
+#: models.py:144
+msgid "Range checks"
+msgstr "Έλεγχοι ακραίων τιμών"
+
+#: models.py:147
 msgid "Range check for {}"
 msgstr "Έλεγχος ακραίων τιμών για τη χρονοσειρά «{}»"
 
-#: models.py:184
+#: models.py:192
 msgid ""
 "If this is selected, it is the absolute value of the change that matters, "
 "not its direction. In this case, the allowed differences must all be "
@@ -102,29 +126,69 @@ msgid ""
 "than a negative difference are considered."
 msgstr ""
 "Αν αυτό επιλεγεί, τότε παίζει ρόλο μόνο η απόλυτη τιμή της διαφοράς. Σ' αυτή "
-"την περίπτωση, οι επιτρεπόμενες διαφορές πρέπει όλες να είναι θετικές. "
-"Αν δεν επιλεγεί, τότε μόνο διαφορές μεγαλύτερες από μια θετική ή μικρότερες "
-"από μια αρνητική διαφορά θα θεωρηθούν εσφαλμένες."
+"την περίπτωση, οι επιτρεπόμενες διαφορές πρέπει όλες να είναι θετικές. Αν "
+"δεν επιλεγεί, τότε μόνο διαφορές μεγαλύτερες από μια θετική ή μικρότερες από "
+"μια αρνητική διαφορά θα θεωρηθούν εσφαλμένες."
 
-#: models.py:193
+#: models.py:203
+msgid "Time consistency checks"
+msgstr "Έλεγχοι χρονικής συνέπειας"
+
+#: models.py:206
 msgid "Time consistency check for {}"
 msgstr "Έλεγχος χρονικής συνέπειας για τη χρονοσειρά «{}»"
 
-#: models.py:340
+#: models.py:277
+msgid "Target time series group"
+msgstr "Εξαγόμενη ομάδα χρονοσειρών"
+
+#: models.py:282
+msgid "Curve interpolation"
+msgstr "Παρεμβολή σε καμπύλη"
+
+#: models.py:283
+msgid "Curve interpolations"
+msgstr "Παρεμβολές σε καμπύλη"
+
+#: models.py:322
+msgid "Start date"
+msgstr "Ημερομηνία έναρξης"
+
+#: models.py:323
+msgid "End date"
+msgstr "Ημερομηνία λήξης"
+
+#: models.py:327
+msgid "Curve period"
+msgstr "Περίοδος"
+
+#: models.py:328
+msgid "Curve periods"
+msgstr "Περίοδοι"
+
+#: models.py:363
 msgid "{}: Point ({}, {})"
 msgstr "{}: Σημείο ({}, {})"
 
-#: models.py:353
+#: models.py:376
 msgid ""
 "E.g. \"10min\", \"H\" (hourly), \"D\" (daily), \"M\" (monthly), \"Y"
 "\" (yearly). More specifically, it's an optional number plus a unit, with no "
 "space in between. The units available are min, H, D, M, Y."
 msgstr ""
-"Π.χ. «10min», «H» (ωριαίο), «D» (ημερήσιο), «M» (μηνιαίο), «Y» "
-"(ετήσιο). Πιο συγκεκριμένα, είναι προαιρετικός αριθμός και μονάδα, "
-"χωρίς διάστημα μεταξύ τους. Οι διαθέσιμες μονάδες είναι min, H, D, M, Y."
+"Π.χ. «10min», «H» (ωριαίο), «D» (ημερήσιο), «M» (μηνιαίο), «Y» (ετήσιο). Πιο "
+"συγκεκριμένα, είναι προαιρετικός αριθμός και μονάδα, χωρίς διάστημα μεταξύ "
+"τους. Οι διαθέσιμες μονάδες είναι min, H, D, M, Y."
 
-#: models.py:362
+#: models.py:380
+msgid "Target time step"
+msgstr "Εξαγόμενο βήμα"
+
+#: models.py:383
+msgid "Method"
+msgstr "Μέθοδος"
+
+#: models.py:388
 msgid ""
 "Defines what happens if some of the source records corresponding to a "
 "destination record are missing. Suppose you are aggregating ten-minute to "
@@ -137,13 +201,17 @@ msgid ""
 msgstr ""
 "Ορίζει τι γίνεται όταν κάποιες από τις εγγραφές λείπουν. Ας πούμε ότι "
 "συναθροίζετε δεκάλεπτη σε ωριαία, και για τις 23 Ιανουαρίου, μεταξύ 12:00 "
-"και 13:00 υπάρχουν μόνο τέσσερις αντί για έξι τιμές στη δεκάλεπτη χρονοσειρά. "
-"Αν ορίσετε αυτή την παράμετρο σε 1 ή μικρότερο, η ωριαία τιμή για τις 23 "
-"Ιανουαρίου 13:00 θα είναι κενή. Αν την ορίσετε σε 2 ή μεγαλύτερο, η ωριαία "
-"τιμή θα εξαχθεί από τις τέσσερις τιμές. Στην τελευταία περίπτωση, η σημαία "
-"MISS θα τεθεί στην εξαγόμενη τιμή."
+"και 13:00 υπάρχουν μόνο τέσσερις αντί για έξι τιμές στη δεκάλεπτη "
+"χρονοσειρά. Αν ορίσετε αυτή την παράμετρο σε 1 ή μικρότερο, η ωριαία τιμή "
+"για τις 23 Ιανουαρίου 13:00 θα είναι κενή. Αν την ορίσετε σε 2 ή μεγαλύτερο, "
+"η ωριαία τιμή θα εξαχθεί από τις τέσσερις τιμές. Στην τελευταία περίπτωση, η "
+"σημαία MISS θα τεθεί στην εξαγόμενη τιμή."
 
-#: models.py:376
+#: models.py:397
+msgid "Max missing"
+msgstr "Μέγιστες ελλείπουσες τιμές"
+
+#: models.py:403
 msgid ""
 "If the time step of the target time series is one day (\"D\") and you set "
 "the resulting timestamp offset to \"1min\", the resulting time stamps will "
@@ -154,9 +222,13 @@ msgstr ""
 "Αν το χρονικό βήμα της εξαγόμενης χρονοσειράς είναι μία μέρα («D») και "
 "ορίσετε αυτή την παράμετρο σε «1min», οι χρονοσφραγίδες στην εξαγόμενη "
 "χρονοσειρά θα τελειώνουν σε 23:59. Αυτό δεν αλλάζει τον τρόπο υπολογισμού, "
-"αλλά μόνο αφαιρεί το προσδιορισμένο διάστημα από τη χρονοσφραγίδα αφού "
-"γίνει ο υπολογισμός."
+"αλλά μόνο αφαιρεί το προσδιορισμένο διάστημα από τη χρονοσφραγίδα αφού γίνει "
+"ο υπολογισμός."
 
-#: models.py:386
+#: models.py:409
+msgid "Resulting timestamp offset"
+msgstr "Μετατόπιση εξαγόμενης χρονοσφραγίδας"
+
+#: models.py:418
 msgid "Aggregation for {}"
 msgstr "Συνάθροιση για τη χρονοσειρά «{}»"

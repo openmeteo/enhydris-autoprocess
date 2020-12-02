@@ -129,11 +129,19 @@ def delete_checks_if_no_check(sender, instance, **kwargs):
 
 class RangeCheck(models.Model):
     checks = models.OneToOneField(Checks, on_delete=models.CASCADE, primary_key=True)
-    upper_bound = models.FloatField()
-    lower_bound = models.FloatField()
-    soft_upper_bound = models.FloatField(blank=True, null=True)
-    soft_lower_bound = models.FloatField(blank=True, null=True)
+    upper_bound = models.FloatField(verbose_name=_("Upper bound"))
+    lower_bound = models.FloatField(verbose_name=_("Lower bound"))
+    soft_upper_bound = models.FloatField(
+        blank=True, null=True, verbose_name=_("Soft upper bound")
+    )
+    soft_lower_bound = models.FloatField(
+        blank=True, null=True, verbose_name=_("Soft lower bound")
+    )
     objects = SelectRelatedManager()
+
+    class Meta:
+        verbose_name = _("Range check")
+        verbose_name_plural = _("Range checks")
 
     def __str__(self):
         return _("Range check for {}").format(str(self.checks.timeseries_group))
@@ -185,9 +193,14 @@ class RateOfChangeCheck(models.Model):
             "not its direction. In this case, the allowed differences must all be "
             "positive. If it's not selected, only rates larger than a positive "
             "or smaller than a negative difference are considered."
-        )
+        ),
+        verbose_name=_("Symmetric"),
     )
     objects = SelectRelatedManager()
+
+    class Meta:
+        verbose_name = _("Time consistency check")
+        verbose_name_plural = _("Time consistency checks")
 
     def __str__(self):
         return _("Time consistency check for {}").format(
@@ -259,9 +272,15 @@ class RateOfChangeThreshold(models.Model):
 
 class CurveInterpolation(AutoProcess):
     target_timeseries_group = models.ForeignKey(
-        TimeseriesGroup, on_delete=models.CASCADE
+        TimeseriesGroup,
+        on_delete=models.CASCADE,
+        verbose_name=_("Target time series group"),
     )
     objects = SelectRelatedManager()
+
+    class Meta:
+        verbose_name = _("Curve interpolation")
+        verbose_name_plural = _("Curve interpolations")
 
     def __str__(self):
         return f"=> {self.target_timeseries_group}"
@@ -300,9 +319,13 @@ class CurvePeriod(models.Model):
     curve_interpolation = models.ForeignKey(
         CurveInterpolation, on_delete=models.CASCADE
     )
-    start_date = models.DateField()
-    end_date = models.DateField()
+    start_date = models.DateField(verbose_name=_("Start date"))
+    end_date = models.DateField(verbose_name=_("End date"))
     objects = SelectRelatedManager()
+
+    class Meta:
+        verbose_name = _("Curve period")
+        verbose_name_plural = _("Curve periods")
 
     def __str__(self):
         return "{}: {} - {}".format(
@@ -354,8 +377,11 @@ class Aggregation(AutoProcess):
             "More specifically, it's an optional number plus a unit, with no space in "
             "between. The units available are min, H, D, M, Y."
         ),
+        verbose_name=_("Target time step"),
     )
-    method = models.CharField(max_length=4, choices=METHOD_CHOICES)
+    method = models.CharField(
+        max_length=4, choices=METHOD_CHOICES, verbose_name=_("Method")
+    )
     max_missing = models.PositiveSmallIntegerField(
         default=0,
         help_text=_(
@@ -368,6 +394,7 @@ class Aggregation(AutoProcess):
             "derived from the four values. In the latter case, the MISS flag will "
             "also be set in the resulting record."
         ),
+        verbose_name=_("Max missing"),
     )
     resulting_timestamp_offset = models.CharField(
         max_length=7,
@@ -379,8 +406,13 @@ class Aggregation(AutoProcess):
             "subtracts the specified offset from the timestamp after the calculations "
             "have finished. Leave empty to leave the timestamps alone."
         ),
+        verbose_name=_("Resulting timestamp offset"),
     )
     objects = SelectRelatedManager()
+
+    class Meta:
+        verbose_name = _("Aggregation")
+        verbose_name_plural = _("Aggregations")
 
     def __str__(self):
         return _("Aggregation for {}").format(str(self.timeseries_group))

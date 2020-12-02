@@ -37,10 +37,10 @@ StationAdmin.render_change_form = render_change_form
 
 
 class TimeseriesGroupForm(forms.ModelForm):
-    lower_bound = forms.FloatField(required=False)
-    soft_lower_bound = forms.FloatField(required=False)
-    soft_upper_bound = forms.FloatField(required=False)
-    upper_bound = forms.FloatField(required=False)
+    lower_bound = forms.FloatField(required=False, label=_("Lower bound"))
+    soft_lower_bound = forms.FloatField(required=False, label=_("Soft lower bound"))
+    soft_upper_bound = forms.FloatField(required=False, label=_("Soft upper bound"))
+    upper_bound = forms.FloatField(required=False, label=_("Upper bound"))
     rocc_thresholds = forms.CharField(
         required=False,
         widget=forms.Textarea,
@@ -264,6 +264,7 @@ class CurvePeriodForm(forms.ModelForm):
             "without headings. If you key them in instead, they must be one point "
             "per line, first X then Y, separated by tab or comma."
         ),
+        label=_("Points"),
     )
 
     class Meta:

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2020-12-01 04:50-0600\n"
+"POT-Creation-Date: 2020-12-10 02:29-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,45 +18,45 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: admin.py:40 models.py:133
+#: enhydris_autoprocess/admin.py:40 enhydris_autoprocess/models.py:133
 msgid "Lower bound"
 msgstr "Απόλυτο κάτω όριο"
 
-#: admin.py:41 models.py:138
+#: enhydris_autoprocess/admin.py:41 enhydris_autoprocess/models.py:138
 msgid "Soft lower bound"
 msgstr "Κάτω όριο (για ύποπτες τιμές)"
 
-#: admin.py:42 models.py:135
+#: enhydris_autoprocess/admin.py:42 enhydris_autoprocess/models.py:135
 msgid "Soft upper bound"
 msgstr "Άνω όριο (για ύποπτες τιμές)"
 
-#: admin.py:43 models.py:132
+#: enhydris_autoprocess/admin.py:43 enhydris_autoprocess/models.py:132
 msgid "Upper bound"
 msgstr "Απόλυτο άνω όριο"
 
-#: admin.py:47
+#: enhydris_autoprocess/admin.py:47
 msgid "Thresholds"
 msgstr "Επιτρεπόμενες διαφορές"
 
-#: admin.py:49
+#: enhydris_autoprocess/admin.py:49
 msgid ""
-"The allowed differences, one per line, like \"10min 7.3\". This example "
-"means that any change higher than 7.3 within 10 minutes will be considered "
-"an error. The time length is specified as an optional number plus a unit, "
-"with no space in between. The units available are min (minutes), H (hours) "
-"and D (days)."
+"The allowed differences, one per line, like \"10min 7.3\" (without the "
+"quotes). This example means that any change higher than 7.3 within 10 "
+"minutes will be considered an error. The time length is specified as an "
+"optional number plus a unit, with no space in between. The units available "
+"are min (minutes), H (hours) and D (days)."
 msgstr ""
-"Οι επιτρεπόμενες διαφορές, μία σε κάθε γραμμή, π.χ. «10min 7.3». Αυτό το "
-"παράδειγμα σημαίνει πως οποιαδήποτε διαφορά μεγαλύτερη από 7.3 εντός 10 "
-"λεπτών θα θεωρηθεί σφάλμα. Το χρονικό διάστημα ορίζεται ως προαιρετικός "
-"αριθμός και μονάδα, χωρίς διάστημα μεταξύ τους. Οι μονάδες είναι min "
-"(λεπτά), H (ώρες) και D (μέρες)."
+"Οι επιτρεπόμενες διαφορές, μία σε κάθε γραμμή, π.χ. «10min 7.3» (χωρίς τα "
+"εισαγωγικά). Αυτό το παράδειγμα σημαίνει πως οποιαδήποτε διαφορά "
+"μεγαλύτερη από 7.3 εντός 10 λεπτών θα θεωρηθεί σφάλμα. Το χρονικό "
+"διάστημα ορίζεται ως προαιρετικός αριθμός και μονάδα, χωρίς διάστημα "
+"μεταξύ τους. Οι μονάδες είναι min (λεπτά), H (ώρες) και D (μέρες)."
 
-#: admin.py:58 models.py:197
+#: enhydris_autoprocess/admin.py:59 enhydris_autoprocess/models.py:197
 msgid "Symmetric"
 msgstr "Συμμετρικό"
 
-#: admin.py:115
+#: enhydris_autoprocess/admin.py:116
 msgid ""
 "To perform a range check, lower and upper bound must be specified; "
 "otherwise, all four bounds must be empty."
@@ -64,20 +64,20 @@ msgstr ""
 "Για πραγματοποίηση ελέγχου ακραίων τιμών, πρέπει να προσδιοριστεί το "
 "κατώτατο και ανώτατο όριο. Αλλιώς, και τα τέσσερα όρια πρέπει να είναι κενά."
 
-#: admin.py:193
+#: enhydris_autoprocess/admin.py:194
 #, python-brace-format
 msgid "\"{line}\" is not a valid (delta_t, allowed_diff) pair"
 msgstr "Το «{line}» δεν είναι έγκυρο ζεύγος (delta_t, allowed_diff)"
 
-#: admin.py:235 models.py:143
+#: enhydris_autoprocess/admin.py:236 enhydris_autoprocess/models.py:143
 msgid "Range check"
 msgstr "Έλεγχος ακραίων τιμών"
 
-#: admin.py:249 models.py:202
+#: enhydris_autoprocess/admin.py:250 enhydris_autoprocess/models.py:202
 msgid "Time consistency check"
 msgstr "Έλεγχος χρονικής συνέπειας"
 
-#: admin.py:262
+#: enhydris_autoprocess/admin.py:263
 msgid ""
 "The points that form the curve. You can copy/paste them from a spreadsheet, "
 "two columns: X and Y. Copy and paste the points only, without headings. If "
@@ -90,35 +90,35 @@ msgstr ""
 "ένα σημείο σε κάθε γραμμή, πρώτα το X και μετά το Υ, διαχωρισμένα με tab ή "
 "κόμμα."
 
-#: admin.py:267
+#: enhydris_autoprocess/admin.py:268
 msgid "Points"
 msgstr "Σημεία"
 
-#: admin.py:353 models.py:414
+#: enhydris_autoprocess/admin.py:354 enhydris_autoprocess/models.py:414
 msgid "Aggregation"
 msgstr "Συνάθροιση"
 
-#: admin.py:354 models.py:415
+#: enhydris_autoprocess/admin.py:355 enhydris_autoprocess/models.py:415
 msgid "Aggregations"
 msgstr "Συναθροίσεις"
 
-#: models.py:24
+#: enhydris_autoprocess/models.py:24
 msgid "Auto processes"
 msgstr "Αυτόματες επεξεργασίες"
 
-#: models.py:95
+#: enhydris_autoprocess/models.py:95
 msgid "Checks for {}"
 msgstr "Έλεγχοι για τη χρονοσειρά «{}»"
 
-#: models.py:144
+#: enhydris_autoprocess/models.py:144
 msgid "Range checks"
 msgstr "Έλεγχοι ακραίων τιμών"
 
-#: models.py:147
+#: enhydris_autoprocess/models.py:147
 msgid "Range check for {}"
 msgstr "Έλεγχος ακραίων τιμών για τη χρονοσειρά «{}»"
 
-#: models.py:192
+#: enhydris_autoprocess/models.py:192
 msgid ""
 "If this is selected, it is the absolute value of the change that matters, "
 "not its direction. In this case, the allowed differences must all be "
@@ -130,47 +130,47 @@ msgstr ""
 "δεν επιλεγεί, τότε μόνο διαφορές μεγαλύτερες από μια θετική ή μικρότερες από "
 "μια αρνητική διαφορά θα θεωρηθούν εσφαλμένες."
 
-#: models.py:203
+#: enhydris_autoprocess/models.py:203
 msgid "Time consistency checks"
 msgstr "Έλεγχοι χρονικής συνέπειας"
 
-#: models.py:206
+#: enhydris_autoprocess/models.py:206
 msgid "Time consistency check for {}"
 msgstr "Έλεγχος χρονικής συνέπειας για τη χρονοσειρά «{}»"
 
-#: models.py:277
+#: enhydris_autoprocess/models.py:277
 msgid "Target time series group"
 msgstr "Εξαγόμενη ομάδα χρονοσειρών"
 
-#: models.py:282
+#: enhydris_autoprocess/models.py:282
 msgid "Curve interpolation"
 msgstr "Παρεμβολή σε καμπύλη"
 
-#: models.py:283
+#: enhydris_autoprocess/models.py:283
 msgid "Curve interpolations"
 msgstr "Παρεμβολές σε καμπύλη"
 
-#: models.py:322
+#: enhydris_autoprocess/models.py:322
 msgid "Start date"
 msgstr "Ημερομηνία έναρξης"
 
-#: models.py:323
+#: enhydris_autoprocess/models.py:323
 msgid "End date"
 msgstr "Ημερομηνία λήξης"
 
-#: models.py:327
+#: enhydris_autoprocess/models.py:327
 msgid "Curve period"
 msgstr "Περίοδος"
 
-#: models.py:328
+#: enhydris_autoprocess/models.py:328
 msgid "Curve periods"
 msgstr "Περίοδοι"
 
-#: models.py:363
+#: enhydris_autoprocess/models.py:363
 msgid "{}: Point ({}, {})"
 msgstr "{}: Σημείο ({}, {})"
 
-#: models.py:376
+#: enhydris_autoprocess/models.py:376
 msgid ""
 "E.g. \"10min\", \"H\" (hourly), \"D\" (daily), \"M\" (monthly), \"Y"
 "\" (yearly). More specifically, it's an optional number plus a unit, with no "
@@ -180,15 +180,15 @@ msgstr ""
 "συγκεκριμένα, είναι προαιρετικός αριθμός και μονάδα, χωρίς διάστημα μεταξύ "
 "τους. Οι διαθέσιμες μονάδες είναι min, H, D, M, Y."
 
-#: models.py:380
+#: enhydris_autoprocess/models.py:380
 msgid "Target time step"
 msgstr "Εξαγόμενο βήμα"
 
-#: models.py:383
+#: enhydris_autoprocess/models.py:383
 msgid "Method"
 msgstr "Μέθοδος"
 
-#: models.py:388
+#: enhydris_autoprocess/models.py:388
 msgid ""
 "Defines what happens if some of the source records corresponding to a "
 "destination record are missing. Suppose you are aggregating ten-minute to "
@@ -207,11 +207,11 @@ msgstr ""
 "η ωριαία τιμή θα εξαχθεί από τις τέσσερις τιμές. Στην τελευταία περίπτωση, η "
 "σημαία MISS θα τεθεί στην εξαγόμενη τιμή."
 
-#: models.py:397
+#: enhydris_autoprocess/models.py:397
 msgid "Max missing"
 msgstr "Μέγιστες ελλείπουσες τιμές"
 
-#: models.py:403
+#: enhydris_autoprocess/models.py:403
 msgid ""
 "If the time step of the target time series is one day (\"D\") and you set "
 "the resulting timestamp offset to \"1min\", the resulting time stamps will "
@@ -225,10 +225,10 @@ msgstr ""
 "αλλά μόνο αφαιρεί το προσδιορισμένο διάστημα από τη χρονοσφραγίδα αφού γίνει "
 "ο υπολογισμός."
 
-#: models.py:409
+#: enhydris_autoprocess/models.py:409
 msgid "Resulting timestamp offset"
 msgstr "Μετατόπιση εξαγόμενης χρονοσφραγίδας"
 
-#: models.py:418
+#: enhydris_autoprocess/models.py:418
 msgid "Aggregation for {}"
 msgstr "Συνάθροιση για τη χρονοσειρά «{}»"

@@ -46,7 +46,8 @@ class TimeseriesGroupForm(forms.ModelForm):
         widget=forms.Textarea,
         label=_("Thresholds"),
         help_text=_(
-            'The allowed differences, one per line, like "10min 7.3". This example '
+            'The allowed differences, one per line, like "10min 7.3" (without the '
+            "quotes). This example "
             "means that any change higher than 7.3 within 10 minutes will be "
             "considered an error. The time length is specified as an optional number "
             "plus a unit, with no space in between. The units available are min "

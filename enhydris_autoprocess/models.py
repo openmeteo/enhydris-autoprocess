@@ -304,15 +304,17 @@ class CurveInterpolation(AutoProcess):
         return obj
 
     def process_timeseries(self):
-        timeseries = self.htimeseries.data
+        source = self.htimeseries.data
+        target = source.copy()
+        target["value"] = np.nan
+        target["flags"] = ""
         for period in self.curveperiod_set.order_by("start_date"):
             x, y = period._get_curve()
             start, end = period.start_date, period.end_date
-            values_array = timeseries.loc[start:end, "value"].values
+            values_array = source.loc[start:end, "value"].values
             new_array = np.interp(values_array, x, y, left=np.nan, right=np.nan)
-            timeseries.loc[start:end, "value"] = new_array
-            timeseries.loc[start:end, "flags"] = ""
-        return timeseries
+            target.loc[start:end, "value"] = new_array
+        return target
 
 
 class CurvePeriod(models.Model):

@@ -715,18 +715,20 @@ class CurvePeriodSetCurveTestCase(TestCase):
 
 class CurveInterpolationProcessTimeseriesTestCase(TestCase):
     _index = [
+        dt.datetime(2019, 4, 30, 12, 10),
         dt.datetime(2019, 5, 21, 10, 20),
         dt.datetime(2019, 5, 21, 10, 30),
         dt.datetime(2019, 5, 21, 10, 40),
         dt.datetime(2019, 6, 21, 10, 50),
         dt.datetime(2019, 6, 21, 11, 00),
         dt.datetime(2019, 6, 21, 11, 10),
+        dt.datetime(2019, 7, 21, 12, 10),
     ]
 
     source_timeseries = pd.DataFrame(
         data={
-            "value": [2.9, 3.1, np.nan, 3.1, 4.9, 7.2],
-            "flags": ["", "", "", "", "FLAG1", "FLAG2"],
+            "value": [3.1, 2.9, 3.1, np.nan, 3.1, 4.9, 7.2, 3.1],
+            "flags": ["", "", "", "", "", "FLAG1", "FLAG2", ""],
         },
         columns=["value", "flags"],
         index=_index,
@@ -734,8 +736,17 @@ class CurveInterpolationProcessTimeseriesTestCase(TestCase):
 
     expected_result = pd.DataFrame(
         data={
-            "value": [np.nan, 105, np.nan, 210, 345, np.nan],
-            "flags": ["", "", "", "", "", ""],
+            "value": [
+                np.nan,  # Because date < startdate (2019-04-30 < 2019-05-01)
+                np.nan,  # Because x < x0 (2.9 < 3)
+                105,
+                np.nan,  # Because x = nan
+                210,
+                345,
+                np.nan,  # Because x > xn (7.2 > 5)
+                np.nan,  # Because date > enddate (2019-07-21 > 2019-06-30)
+            ],
+            "flags": ["", "", "", "", "", "", "", ""],
         },
         columns=["value", "flags"],
         index=_index,

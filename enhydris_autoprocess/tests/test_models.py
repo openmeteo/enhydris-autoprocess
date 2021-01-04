@@ -125,7 +125,7 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
             variable__descr="h",
         )
         self.source_timeseries = mommy.make(
-            Timeseries, timeseries_group=self.timeseries_group, type=Timeseries.RAW
+            Timeseries, timeseries_group=self.timeseries_group, type=Timeseries.INITIAL
         )
         self.source_timeseries.set_data(
             pd.DataFrame(
@@ -211,7 +211,7 @@ class ChecksTestCase(TestCase):
 
     def test_source_timeseries(self):
         self.timeseries_group = mommy.make(TimeseriesGroup)
-        self._make_timeseries(id=42, type=Timeseries.RAW)
+        self._make_timeseries(id=42, type=Timeseries.INITIAL)
         self._make_timeseries(id=41, type=Timeseries.CHECKED)
         checks = mommy.make(Checks, timeseries_group=self.timeseries_group)
         self.assertEqual(checks.source_timeseries.id, 42)
@@ -230,7 +230,7 @@ class ChecksTestCase(TestCase):
 
     def test_target_timeseries(self):
         self.timeseries_group = mommy.make(TimeseriesGroup)
-        self._make_timeseries(id=42, type=Timeseries.RAW)
+        self._make_timeseries(id=42, type=Timeseries.INITIAL)
         self._make_timeseries(id=41, type=Timeseries.CHECKED)
         checks = mommy.make(Checks, timeseries_group=self.timeseries_group)
         self.assertEqual(checks.target_timeseries.id, 41)
@@ -554,8 +554,8 @@ class CurveInterpolationTestCase(TestCase):
             str(CurveInterpolation.objects.first())
 
     def test_source_timeseries(self):
-        self._make_timeseries(id=42, timeseries_group_num=1, type=Timeseries.RAW)
-        self._make_timeseries(id=41, timeseries_group_num=2, type=Timeseries.PROCESSED)
+        self._make_timeseries(id=42, timeseries_group_num=1, type=Timeseries.INITIAL)
+        self._make_timeseries(id=41, timeseries_group_num=2, type=Timeseries.INITIAL)
         ci = mommy.make(
             CurveInterpolation,
             timeseries_group=self.timeseries_group1,
@@ -580,8 +580,8 @@ class CurveInterpolationTestCase(TestCase):
         self.assertTrue(Timeseries.objects.exists())
 
     def test_target_timeseries(self):
-        self._make_timeseries(id=42, timeseries_group_num=1, type=Timeseries.RAW)
-        self._make_timeseries(id=41, timeseries_group_num=2, type=Timeseries.PROCESSED)
+        self._make_timeseries(id=42, timeseries_group_num=1, type=Timeseries.INITIAL)
+        self._make_timeseries(id=41, timeseries_group_num=2, type=Timeseries.INITIAL)
         ci = mommy.make(
             CurveInterpolation,
             timeseries_group=self.timeseries_group1,
@@ -867,14 +867,8 @@ class AggregationTestCase(TestCase):
         aggregation.resulting_timestamp_offset = "-1min"
         aggregation.save()
 
-    def test_source_timeseries_when_raw_already_exists(self):
-        self._make_timeseries(id=42, type=Timeseries.RAW)
-        self._make_timeseries(id=41, type=Timeseries.AGGREGATED)
-        aggregation = mommy.make(Aggregation, timeseries_group=self.timeseries_group)
-        self.assertEqual(aggregation.source_timeseries.id, 42)
-
-    def test_source_timeseries_when_processed_already_exists(self):
-        self._make_timeseries(id=42, type=Timeseries.PROCESSED)
+    def test_source_timeseries_when_initial_already_exists(self):
+        self._make_timeseries(id=42, type=Timeseries.INITIAL)
         self._make_timeseries(id=41, type=Timeseries.AGGREGATED)
         aggregation = mommy.make(Aggregation, timeseries_group=self.timeseries_group)
         self.assertEqual(aggregation.source_timeseries.id, 42)
@@ -895,7 +889,7 @@ class AggregationTestCase(TestCase):
         self.assertTrue(Timeseries.objects.exists())
 
     def test_target_timeseries(self):
-        self._make_timeseries(id=42, type=Timeseries.RAW)
+        self._make_timeseries(id=42, type=Timeseries.INITIAL)
         self._make_timeseries(id=41, type=Timeseries.AGGREGATED)
         aggregation = mommy.make(
             Aggregation, timeseries_group=self.timeseries_group, target_time_step="H"

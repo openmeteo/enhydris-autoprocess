@@ -26,7 +26,7 @@ class EnqueueAutoProcessTestCase(TransactionTestCase):
         self.timeseries = mommy.make(
             Timeseries,
             timeseries_group=self.auto_process.timeseries_group,
-            type=Timeseries.RAW,
+            type=Timeseries.INITIAL,
         )
 
     @mock.patch("enhydris_autoprocess.apps.execute_auto_process")

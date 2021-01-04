@@ -97,7 +97,7 @@ class Checks(AutoProcess):
     @property
     def source_timeseries(self):
         obj, created = self.timeseries_group.timeseries_set.get_or_create(
-            type=Timeseries.RAW
+            type=Timeseries.INITIAL
         )
         return obj
 
@@ -292,14 +292,14 @@ class CurveInterpolation(AutoProcess):
         except Timeseries.DoesNotExist:
             pass
         obj, created = self.timeseries_group.timeseries_set.get_or_create(
-            type=Timeseries.RAW
+            type=Timeseries.INITIAL
         )
         return obj
 
     @property
     def target_timeseries(self):
         obj, created = self.target_timeseries_group.timeseries_set.get_or_create(
-            type=Timeseries.PROCESSED
+            type=Timeseries.INITIAL
         )
         return obj
 
@@ -424,14 +424,10 @@ class Aggregation(AutoProcess):
         try:
             return self.timeseries_group.timeseries_set.get(type=Timeseries.CHECKED)
         except Timeseries.DoesNotExist:
-            pass
-        try:
-            return self.timeseries_group.timeseries_set.get(
-                type__in=(Timeseries.RAW, Timeseries.PROCESSED)
+            obj, created = self.timeseries_group.timeseries_set.get_or_create(
+                type=Timeseries.INITIAL
             )
-        except Timeseries.DoesNotExist:
-            pass
-        return self.timeseries_group.timeseries_set.create(type=Timeseries.RAW)
+            return obj
 
     @property
     def target_timeseries(self):

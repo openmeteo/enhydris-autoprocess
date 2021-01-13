@@ -97,7 +97,7 @@ class Checks(AutoProcess):
     @property
     def source_timeseries(self):
         obj, created = self.timeseries_group.timeseries_set.get_or_create(
-            type=Timeseries.RAW
+            type=Timeseries.INITIAL
         )
         return obj
 
@@ -292,27 +292,29 @@ class CurveInterpolation(AutoProcess):
         except Timeseries.DoesNotExist:
             pass
         obj, created = self.timeseries_group.timeseries_set.get_or_create(
-            type=Timeseries.RAW
+            type=Timeseries.INITIAL
         )
         return obj
 
     @property
     def target_timeseries(self):
         obj, created = self.target_timeseries_group.timeseries_set.get_or_create(
-            type=Timeseries.PROCESSED
+            type=Timeseries.INITIAL
         )
         return obj
 
     def process_timeseries(self):
-        timeseries = self.htimeseries.data
+        source = self.htimeseries.data
+        target = source.copy()
+        target["value"] = np.nan
+        target["flags"] = ""
         for period in self.curveperiod_set.order_by("start_date"):
             x, y = period._get_curve()
             start, end = period.start_date, period.end_date
-            values_array = timeseries.loc[start:end, "value"].values
+            values_array = source.loc[start:end, "value"].values
             new_array = np.interp(values_array, x, y, left=np.nan, right=np.nan)
-            timeseries.loc[start:end, "value"] = new_array
-            timeseries.loc[start:end, "flags"] = ""
-        return timeseries
+            target.loc[start:end, "value"] = new_array
+        return target
 
 
 class CurvePeriod(models.Model):
@@ -422,14 +424,10 @@ class Aggregation(AutoProcess):
         try:
             return self.timeseries_group.timeseries_set.get(type=Timeseries.CHECKED)
         except Timeseries.DoesNotExist:
-            pass
-        try:
-            return self.timeseries_group.timeseries_set.get(
-                type__in=(Timeseries.RAW, Timeseries.PROCESSED)
+            obj, created = self.timeseries_group.timeseries_set.get_or_create(
+                type=Timeseries.INITIAL
             )
-        except Timeseries.DoesNotExist:
-            pass
-        return self.timeseries_group.timeseries_set.create(type=Timeseries.RAW)
+            return obj
 
     @property
     def target_timeseries(self):

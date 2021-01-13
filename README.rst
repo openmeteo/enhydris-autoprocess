@@ -47,7 +47,7 @@ and +38 °C, you might decide that anything below -25 or above +50 °C
 +40 °C (the "soft" limits) is a suspect value. In that case, you
 configure enhydris-autoprocess with the soft and hard limits. Each
 time data is uploaded, an event is triggered, resulting in an
-asynchronous process processing the uploaded raw data, deleting the
+asynchronous process processing the initial uploaded data, deleting the
 values outside the hard limits, flagging as suspect the values outside
 the soft limits, and saving the result to the "checked" time series of
 the time series group.
@@ -80,15 +80,15 @@ other and they result in the "checked" time series.)
   ``process_timeseries()`` method.
 - ``source_timeseries`` (property). The source time series of the time
   series group for this auto-process. It depends on the kind of
-  auto-process: for ``Checks`` it is the raw time series; for
+  auto-process: for ``Checks`` it is the initial time series; for
   ``Aggregation`` and ``CurveInterpolation`` it is the checked time
-  series if it exists, or the raw if it does not exist. If no suitable
-  time series exists, it is created.
+  series if it exists, or the initial if it does not exist. If no
+  suitable time series exists, it is created.
 - ``target_timeseries`` (property). The target time series of the time
   series group for this auto-process. It depends on the kind of
   auto-process: for ``Checks`` it is the checked time series; for
   ``Aggregation`` it is the aggregated time series with the
-  target time step; for ``CurveInterpolation`` it is the "processed"
+  target time step; for ``CurveInterpolation`` it is the initial
   time series of the target time series group (``CurveInterpolation``
   has an additional ``target_timeseries_group`` attribute). The target
   time series is created if it does not exist.
@@ -97,8 +97,7 @@ other and they result in the "checked" time series.)
 Meta
 ====
 
-© 2019 National Technical University of Athens
+© 2019-2020 National Technical University of Athens
 
 Enhydris-autoprocess is free software, available under the GNU Affero
 General Public License.
-

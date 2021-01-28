@@ -961,8 +961,6 @@ class AggregationProcessTimeseriesTestCase(TestCase):
             Aggregation,
             timeseries_group__gentity=station,
             timeseries_group__variable__descr="Hello",
-            target_timeseries_group__gentity=station,
-            target_timeseries_group__variable__descr="Hello",
             target_time_step="H",
             method="sum",
             max_missing=max_missing,
@@ -999,3 +997,43 @@ class AggregationProcessTimeseriesTestCase(TestCase):
         expected_result.index.name = result.index.name
         expected_result.index.freq = result.index.freq
         pd.testing.assert_frame_equal(result, expected_result)
+
+
+class AggregationProcessTimeseriesWhenNoTimeStepTestCase(TestCase):
+    """Check what's done when the source time series has no time step.
+
+    We can't regularize (and therefore aggregate) unless the source time series has a
+    time step. We check that in such a case we behave gracefully.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        station = mommy.make(Station)
+        timeseries_group = mommy.make(
+            TimeseriesGroup, gentity=station, variable__descr="hello"
+        )
+        cls.aggregation = mommy.make(
+            Aggregation,
+            timeseries_group=timeseries_group,
+            target_time_step="H",
+            method="sum",
+            max_missing=3,
+            resulting_timestamp_offset="",
+        )
+
+    def setUp(self):
+        source_timeseries = pd.DataFrame(
+            data={"value": [42], "flags": [""]},
+            columns=["value", "flags"],
+            index=[dt.datetime(2019, 5, 21, 11, 20)],
+        )
+        self.aggregation._htimeseries = HTimeseries(source_timeseries)
+        self.aggregation._htimeseries.time_step = ""
+
+    @mock.patch("enhydris_autoprocess.models.logging")
+    def test_no_exception(self, logging_mock):
+        self.aggregation.process_timeseries()
+        logging_mock.getLogger.return_value.error.assert_called_once_with(
+            "The time step is malformed or is specified in months. Only time steps "
+            "specified in minutes, hours or days are supported."
+        )

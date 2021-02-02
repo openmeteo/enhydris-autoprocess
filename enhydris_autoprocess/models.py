@@ -1,5 +1,6 @@
 import csv
 import datetime as dt
+import logging
 import re
 from io import StringIO
 
@@ -9,7 +10,8 @@ from django.utils.translation import gettext_lazy as _
 
 import numpy as np
 import pandas as pd
-from haggregate import aggregate, regularize
+from haggregate import RegularizeError, aggregate, regularize
+from htimeseries import HTimeseries
 from rocc import Threshold, rocc
 
 from enhydris.models import Timeseries, TimeseriesGroup
@@ -458,7 +460,11 @@ class Aggregation(AutoProcess):
 
     def process_timeseries(self):
         self.source_end_date = self.htimeseries.data.index[-1]
-        regularized = self._regularize_time_series(self.htimeseries)
+        try:
+            regularized = self._regularize_time_series(self.htimeseries)
+        except RegularizeError as e:
+            logging.getLogger("enhydris.autoprocess").error(str(e))
+            return HTimeseries()
         aggregated = self._aggregate_time_series(regularized)
         return self._trim_last_record_if_not_complete(aggregated)
 

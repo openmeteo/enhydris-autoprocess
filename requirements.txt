@@ -4,4 +4,4 @@ haggregate>=2,<3
 # a dependency. However, using pandas>=1.1 causes some tests to fail, so for the
 # time being we keep it at <1.1.
 pandas<1.1
-rocc>=1,<2
+rocc>=1,<3

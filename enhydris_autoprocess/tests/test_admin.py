@@ -9,7 +9,7 @@ from model_mommy import mommy
 import enhydris.models
 from enhydris.tests.admin import get_formset_parameters
 from enhydris_autoprocess import models
-from enhydris_autoprocess.admin import CurvePeriodForm
+from enhydris_autoprocess.admin import AggregationForm, CurvePeriodForm
 
 User = get_user_model()
 
@@ -357,6 +357,45 @@ class TimeseriesGroupFormRocCheckInitialValuesTestCase(TimeseriesGroupFormTestCa
     def test_thresholds(self):
         value = self.soup.find(id="id_timeseriesgroup_set-0-rocc_thresholds").text
         self.assertEqual(value.strip(), "10min\t25.0\n1H\t35.0")
+
+
+@override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
+class AggregationFormTestCase(TestCase):
+    def setUp(self):
+        self.station = mommy.make(enhydris.models.Station)
+        self.aggregation = mommy.make(
+            models.Aggregation,
+            target_time_step="10min",
+            method="sum",
+            timeseries_group__gentity=self.station,
+        )
+
+    def test_does_not_validate_when_invalid_time_step(self):
+        form = AggregationForm(
+            {
+                "target_time_step": "1h",
+                "method": "sum",
+                "max_missing": 0,
+                "resulting_timestamp_offset": "",
+            },
+            instance=self.aggregation,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors["target_time_step"][0], '"1h" is not a valid time step'
+        )
+
+    def test_validates(self):
+        form = AggregationForm(
+            {
+                "target_time_step": "1H",
+                "method": "sum",
+                "max_missing": 0,
+                "resulting_timestamp_offset": "",
+            },
+            instance=self.aggregation,
+        )
+        self.assertTrue(form.is_valid())
 
 
 class CurvePeriodFormTestCase(TestCase):

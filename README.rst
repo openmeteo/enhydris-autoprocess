@@ -98,6 +98,14 @@ Meta
 ====
 
 © 2019-2020 National Technical University of Athens
+© 2019-2020 Institute of Communication and Computer Systems
+
+Enhydris-autoprocess was funded by NTUA_ and ICCS_ as part of the
+OpenHi_ project.
 
 Enhydris-autoprocess is free software, available under the GNU Affero
 General Public License.
+
+.. _ntua: https://www.ntua.gr/
+.. _iccs: https://www.iccs.gr/
+.. _openhi: https://openhi.net/

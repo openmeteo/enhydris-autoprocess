@@ -14,7 +14,7 @@ from haggregate import RegularizeError, aggregate, regularize
 from htimeseries import HTimeseries
 from rocc import Threshold, rocc
 
-from enhydris.models import Timeseries, TimeseriesGroup
+from enhydris.models import Timeseries, TimeseriesGroup, check_time_step
 
 from . import tasks
 
@@ -439,6 +439,7 @@ class Aggregation(AutoProcess):
         return obj
 
     def save(self, force_insert=False, force_update=False, *args, **kwargs):
+        check_time_step(self.target_time_step)
         self._check_resulting_timestamp_offset()
         super().save(force_insert, force_update, *args, **kwargs)
 

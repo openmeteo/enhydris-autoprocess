@@ -11,7 +11,7 @@ from enhydris.admin.station import (
     StationAdmin,
     TimeseriesGroupInline,
 )
-from enhydris.models import TimeseriesGroup
+from enhydris.models import TimeseriesGroup, check_time_step
 
 from .models import (
     Aggregation,
@@ -345,6 +345,14 @@ class AggregationForm(forms.ModelForm):
             "resulting_timestamp_offset",
         )
         widgets = {"resulting_timestamp_offset": forms.TextInput(attrs={"size": 7})}
+
+    def clean_target_time_step(self):
+        try:
+            result = self.cleaned_data.get("target_time_step", "")
+            check_time_step(result)
+            return result
+        except ValueError as e:
+            raise forms.ValidationError(str(e))
 
 
 class AggregationInline(InlinePermissionsMixin, nested_admin.NestedTabularInline):

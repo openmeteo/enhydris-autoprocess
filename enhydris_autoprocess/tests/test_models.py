@@ -62,7 +62,7 @@ class AutoProcessSaveTestCase(TransactionTestCase):
     # enhydris.TimeseriesRecord is unmanaged, TransactionTestCase doesn't attempt to
     # truncate it, and PostgreSQL complains it can't truncate enhydris_timeseries
     # without truncating enhydris_timeseriesrecord at the same time.
-    available_apps = ["enhydris_autoprocess"]
+    available_apps = ["django.contrib.sites", "enhydris", "enhydris_autoprocess"]
 
     def setUp(self):
         with transaction.atomic():
@@ -802,7 +802,9 @@ class AggregationTestCase(TestCase):
         self.assertEqual(Aggregation.objects.count(), 1)
 
     def _mommy_make_aggregation(self):
-        return mommy.make(Aggregation, timeseries_group=self.timeseries_group)
+        return mommy.make(
+            Aggregation, timeseries_group=self.timeseries_group, target_time_step="H"
+        )
 
     def test_update(self):
         self._mommy_make_aggregation()
@@ -870,7 +872,9 @@ class AggregationTestCase(TestCase):
     def test_source_timeseries_when_initial_already_exists(self):
         self._make_timeseries(id=42, type=Timeseries.INITIAL)
         self._make_timeseries(id=41, type=Timeseries.AGGREGATED)
-        aggregation = mommy.make(Aggregation, timeseries_group=self.timeseries_group)
+        aggregation = mommy.make(
+            Aggregation, timeseries_group=self.timeseries_group, target_time_step="H"
+        )
         self.assertEqual(aggregation.source_timeseries.id, 42)
 
     def _make_timeseries(self, id, type):
@@ -883,7 +887,9 @@ class AggregationTestCase(TestCase):
         )
 
     def test_automatically_creates_source_timeseries(self):
-        aggregation = mommy.make(Aggregation, timeseries_group=self.timeseries_group)
+        aggregation = mommy.make(
+            Aggregation, timeseries_group=self.timeseries_group, target_time_step="H"
+        )
         self.assertFalse(Timeseries.objects.exists())
         aggregation.source_timeseries.id
         self.assertTrue(Timeseries.objects.exists())
@@ -903,6 +909,13 @@ class AggregationTestCase(TestCase):
         self.assertFalse(Timeseries.objects.exists())
         aggregation.target_timeseries.id
         self.assertTrue(Timeseries.objects.exists())
+
+    def test_checks_target_time_step(self):
+        aggregation = Aggregation(
+            timeseries_group=self.timeseries_group, target_time_step="h"
+        )
+        with self.assertRaisesRegex(ValueError, '"h" is not a valid time step'):
+            aggregation.save()
 
 
 class AggregationProcessTimeseriesTestCase(TestCase):

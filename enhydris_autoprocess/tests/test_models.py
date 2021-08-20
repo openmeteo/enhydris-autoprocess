@@ -62,7 +62,7 @@ class AutoProcessSaveTestCase(TransactionTestCase):
     # enhydris.TimeseriesRecord is unmanaged, TransactionTestCase doesn't attempt to
     # truncate it, and PostgreSQL complains it can't truncate enhydris_timeseries
     # without truncating enhydris_timeseriesrecord at the same time.
-    available_apps = ["enhydris_autoprocess"]
+    available_apps = ["django.contrib.sites", "enhydris", "enhydris_autoprocess"]
 
     def setUp(self):
         with transaction.atomic():

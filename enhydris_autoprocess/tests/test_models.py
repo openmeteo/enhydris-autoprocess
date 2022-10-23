@@ -17,6 +17,7 @@ from model_mommy import mommy
 from rocc import Threshold
 
 from enhydris.models import Station, Timeseries, TimeseriesGroup, Variable
+from enhydris.tests import ClearCacheMixin
 from enhydris_autoprocess import tasks
 from enhydris_autoprocess.models import (
     Aggregation,
@@ -88,7 +89,7 @@ class AutoProcessSaveTestCase(TransactionTestCase):
             tasks.execute_auto_process.delay.assert_not_called()
 
 
-class AutoProcessExecuteTestCase(TestCase):
+class AutoProcessExecuteTestCase(ClearCacheMixin, TestCase):
     @mock.patch(
         "enhydris_autoprocess.models.Checks.process_timeseries",
         side_effect=lambda self: self.htimeseries,

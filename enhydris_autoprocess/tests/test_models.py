@@ -2,6 +2,11 @@ import datetime as dt
 import textwrap
 from unittest import mock
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
+
 from django.db import DataError, IntegrityError, transaction
 from django.test import TestCase, TransactionTestCase
 
@@ -91,12 +96,11 @@ class AutoProcessExecuteTestCase(TestCase):
     )
     def setUp(self, m):
         self.mock_execute = m
-        station = mommy.make(Station)
+        station = mommy.make(Station, display_timezone="Etc/GMT-2")
         self.timeseries_group = mommy.make(
             TimeseriesGroup,
             gentity=station,
             variable__descr="irrelevant",
-            time_zone__utc_offset=120,
         )
         self.checks = mommy.make(Checks, timeseries_group=self.timeseries_group)
         self.range_check = mommy.make(RangeCheck, checks=self.checks)
@@ -117,11 +121,10 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
     )
     def setUp(self, m):
         self.mock_process_timeseries = m
-        station = mommy.make(Station)
+        station = mommy.make(Station, display_timezone="Etc/GMT-2")
         self.timeseries_group = mommy.make(
             TimeseriesGroup,
             gentity=station,
-            time_zone__utc_offset=0,
             variable__descr="h",
         )
         self.source_timeseries = mommy.make(
@@ -132,10 +135,10 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
                 data={"value": [1.0, 2.0, 3.0, 4.0], "flags": ["", "", "", ""]},
                 columns=["value", "flags"],
                 index=[
-                    dt.datetime(2019, 5, 21, 17, 0),
-                    dt.datetime(2019, 5, 21, 17, 10),
-                    dt.datetime(2019, 5, 21, 17, 20),
-                    dt.datetime(2019, 5, 21, 17, 30),
+                    dt.datetime(2019, 5, 21, 17, 0, tzinfo=ZoneInfo("Etc/GMT-2")),
+                    dt.datetime(2019, 5, 21, 17, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
+                    dt.datetime(2019, 5, 21, 17, 20, tzinfo=ZoneInfo("Etc/GMT-2")),
+                    dt.datetime(2019, 5, 21, 17, 30, tzinfo=ZoneInfo("Etc/GMT-2")),
                 ],
             )
         )
@@ -147,10 +150,11 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
                 data={"value": [1.0, 2.0], "flags": ["", ""]},
                 columns=["value", "flags"],
                 index=[
-                    dt.datetime(2019, 5, 21, 17, 0),
-                    dt.datetime(2019, 5, 21, 17, 10),
+                    dt.datetime(2019, 5, 21, 17, 0, tzinfo=ZoneInfo("Etc/GMT-2")),
+                    dt.datetime(2019, 5, 21, 17, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
                 ],
-            )
+            ),
+            default_timezone="Etc/GMT-2",
         )
         self.checks = mommy.make(Checks, timeseries_group=self.timeseries_group)
         self.range_check = mommy.make(RangeCheck, checks=self.checks)
@@ -163,7 +167,10 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
         expected_arg = pd.DataFrame(
             data={"value": [3.0, 4.0], "flags": ["", ""]},
             columns=["value", "flags"],
-            index=[dt.datetime(2019, 5, 21, 17, 20), dt.datetime(2019, 5, 21, 17, 30)],
+            index=[
+                dt.datetime(2019, 5, 21, 17, 20, tzinfo=ZoneInfo("Etc/GMT-2")),
+                dt.datetime(2019, 5, 21, 17, 30, tzinfo=ZoneInfo("Etc/GMT-2")),
+            ],
         )
         expected_arg.index.name = "date"
         pd.testing.assert_frame_equal(self.checks.htimeseries.data, expected_arg)
@@ -173,10 +180,10 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
             data={"value": [1.0, 2.0, 3.0, 4.0], "flags": ["", "", "", ""]},
             columns=["value", "flags"],
             index=[
-                dt.datetime(2019, 5, 21, 17, 0),
-                dt.datetime(2019, 5, 21, 17, 10),
-                dt.datetime(2019, 5, 21, 17, 20),
-                dt.datetime(2019, 5, 21, 17, 30),
+                dt.datetime(2019, 5, 21, 17, 0, tzinfo=ZoneInfo("Etc/GMT-2")),
+                dt.datetime(2019, 5, 21, 17, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
+                dt.datetime(2019, 5, 21, 17, 20, tzinfo=ZoneInfo("Etc/GMT-2")),
+                dt.datetime(2019, 5, 21, 17, 30, tzinfo=ZoneInfo("Etc/GMT-2")),
             ],
         )
         expected_result.index.name = "date"
@@ -245,11 +252,10 @@ class ChecksTestCase(TestCase):
     @mock.patch("enhydris_autoprocess.models.RangeCheck.check_timeseries")
     @mock.patch("enhydris.models.Timeseries.append_data")
     def test_runs_range_check(self, m1, m2):
-        station = mommy.make(Station)
+        station = mommy.make(Station, display_timezone="Etc/GMT")
         range_check = mommy.make(
             RangeCheck,
             checks__timeseries_group__gentity=station,
-            checks__timeseries_group__time_zone__utc_offset=0,
             checks__timeseries_group__variable__descr="Temperature",
         )
         range_check.checks.execute()

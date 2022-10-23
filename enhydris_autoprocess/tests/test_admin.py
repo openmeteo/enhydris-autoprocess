@@ -28,9 +28,6 @@ class TestCaseBase(TestCase):
         )
         self.variable = mommy.make(enhydris.models.Variable, descr="myvar")
         self.unit = mommy.make(enhydris.models.UnitOfMeasurement)
-        self.time_zone = mommy.make(
-            enhydris.models.TimeZone, code="EET", utc_offset=120
-        )
         self.station = mommy.make(
             enhydris.models.Station, creator=self.user, owner=self.organization
         )
@@ -54,6 +51,7 @@ class TimeseriesGroupFormTestCaseBase(TestCaseBase):
             "owner": self.organization.id,
             "geom_0": "20.94565",
             "geom_1": "39.12102",
+            "display_timezone": "Etc/GMT-2",
             **get_formset_parameters(
                 self.client, f"/admin/enhydris/station/{self.station.id}/change/"
             ),
@@ -62,7 +60,6 @@ class TimeseriesGroupFormTestCaseBase(TestCaseBase):
             "timeseriesgroup_set-0-variable": self.variable.id,
             "timeseriesgroup_set-0-unit_of_measurement": self.unit.id,
             "timeseriesgroup_set-0-precision": 2,
-            "timeseriesgroup_set-0-time_zone": self.time_zone.id,
             "timeseriesgroup_set-0-timeseries_set-INITIAL_FORMS": "0",
         }
 

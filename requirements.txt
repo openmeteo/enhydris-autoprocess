@@ -1,3 +1,2 @@
-celery>=4,<5
 haggregate>=3,<4
 rocc>=3,<4

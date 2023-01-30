@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from model_mommy import mommy
 
 import enhydris.models
+from enhydris.tests import ClearCacheMixin
 from enhydris.tests.admin import get_formset_parameters
 from enhydris_autoprocess import models
 from enhydris_autoprocess.admin import AggregationForm, CurvePeriodForm
@@ -14,26 +15,26 @@ from enhydris_autoprocess.admin import AggregationForm, CurvePeriodForm
 User = get_user_model()
 
 
-class TestCaseBase(TestCase):
-    def _create_data(self):
-        self.user = User.objects.create_user(
+class TestCaseBase(ClearCacheMixin, TestCase):
+    @classmethod
+    def _create_data(cls):
+        cls.user = User.objects.create_user(
             username="alice",
             password="topsecret",
             is_active=True,
             is_staff=True,
             is_superuser=False,
         )
-        self.organization = enhydris.models.Organization.objects.create(
+        cls.organization = enhydris.models.Organization.objects.create(
             name="Serial killers SA"
         )
-        self.variable = mommy.make(enhydris.models.Variable, descr="myvar")
-        self.unit = mommy.make(enhydris.models.UnitOfMeasurement)
-        self.time_zone = mommy.make(
-            enhydris.models.TimeZone, code="EET", utc_offset=120
+        cls.variable = mommy.make(enhydris.models.Variable, descr="myvar")
+        cls.unit = mommy.make(enhydris.models.UnitOfMeasurement)
+        cls.station = mommy.make(
+            enhydris.models.Station, creator=cls.user, owner=cls.organization
         )
-        self.station = mommy.make(
-            enhydris.models.Station, creator=self.user, owner=self.organization
-        )
+
+    def setUp(self):
         self.client.login(username="alice", password="topsecret")
 
     def _post_form(self, data):
@@ -54,6 +55,7 @@ class TimeseriesGroupFormTestCaseBase(TestCaseBase):
             "owner": self.organization.id,
             "geom_0": "20.94565",
             "geom_1": "39.12102",
+            "display_timezone": "Etc/GMT-2",
             **get_formset_parameters(
                 self.client, f"/admin/enhydris/station/{self.station.id}/change/"
             ),
@@ -62,48 +64,55 @@ class TimeseriesGroupFormTestCaseBase(TestCaseBase):
             "timeseriesgroup_set-0-variable": self.variable.id,
             "timeseriesgroup_set-0-unit_of_measurement": self.unit.id,
             "timeseriesgroup_set-0-precision": 2,
-            "timeseriesgroup_set-0-time_zone": self.time_zone.id,
             "timeseriesgroup_set-0-timeseries_set-INITIAL_FORMS": "0",
         }
 
-    def _ensure_we_have_timeseries_group(self):
-        if not hasattr(self, "timeseries_group"):
-            self.timeseries_group = mommy.make(
+    @classmethod
+    def _ensure_we_have_timeseries_group(cls):
+        if not hasattr(cls, "timeseries_group"):
+            cls.timeseries_group = mommy.make(
                 enhydris.models.TimeseriesGroup,
-                variable=self.variable,
-                gentity=self.station,
+                variable=cls.variable,
+                gentity=cls.station,
             )
 
-    def _ensure_we_have_checks(self):
-        self._ensure_we_have_timeseries_group()
-        if not hasattr(self, "checks"):
-            self.checks = mommy.make(
-                models.Checks, timeseries_group=self.timeseries_group
+    @classmethod
+    def _ensure_we_have_checks(cls):
+        cls._ensure_we_have_timeseries_group()
+        if not hasattr(cls, "checks"):
+            cls.checks = mommy.make(
+                models.Checks, timeseries_group=cls.timeseries_group
             )
 
-    def _create_range_check(self):
-        self._ensure_we_have_checks()
-        self.range_check = mommy.make(
+    @classmethod
+    def _create_range_check(cls):
+        cls._ensure_we_have_checks()
+        cls.range_check = mommy.make(
             models.RangeCheck,
-            checks=self.checks,
+            checks=cls.checks,
             lower_bound=1,
             soft_lower_bound=2,
             soft_upper_bound=3,
             upper_bound=4,
         )
 
-    def _create_roc_check(self):
-        self._ensure_we_have_checks()
-        self.roc_check = mommy.make(
-            models.RateOfChangeCheck, checks=self.checks, symmetric=True
+    @classmethod
+    def _create_roc_check(cls):
+        cls._ensure_we_have_checks()
+        cls.roc_check = mommy.make(
+            models.RateOfChangeCheck, checks=cls.checks, symmetric=True
         )
-        self.roc_check.set_thresholds("10min\t25.0\n1H\t35.0\n")
+        cls.roc_check.set_thresholds("10min\t25.0\n1H\t35.0\n")
 
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
 class TimeseriesGroupFormRangeCheckValidationTestCase(TimeseriesGroupFormTestCaseBase):
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+
     def setUp(self):
-        self._create_data()
+        super().setUp()
         self.data = self._get_basic_form_contents()
 
     def test_returns_error_if_only_upper_bound_is_specified(self):
@@ -133,8 +142,12 @@ class TimeseriesGroupFormRangeCheckValidationTestCase(TimeseriesGroupFormTestCas
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
 class TimeseriesGroupFormCreatesRangeCheckTestCase(TimeseriesGroupFormTestCaseBase):
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+
     def setUp(self):
-        self._create_data()
+        super().setUp()
         self._get_response()
         self.range_check = models.RangeCheck.objects.first()
 
@@ -166,9 +179,13 @@ class TimeseriesGroupFormCreatesRangeCheckTestCase(TimeseriesGroupFormTestCaseBa
 class TimeseriesGroupFormSavesExistingRangeCheckTestCase(
     TimeseriesGroupFormCreatesRangeCheckTestCase
 ):
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+        cls._create_range_check()
+
     def setUp(self):
-        self._create_data()
-        self._create_range_check()
+        super().setUp()
         self._get_response()
         range_checks = models.RangeCheck.objects.all()
         assert range_checks.count() == 1
@@ -190,10 +207,14 @@ class TimeseriesGroupFormSavesExistingRangeCheckTestCase(
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
 class TimeseriesGroupFormDeletesRangeCheckTestCase(TimeseriesGroupFormTestCaseBase):
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+        cls._create_range_check()
+        cls._create_roc_check()  # This is to ensure it won't be deleted
+
     def setUp(self):
-        self._create_data()
-        self._create_range_check()
-        self._create_roc_check()  # This is to ensure it won't be deleted
+        super().setUp()
         assert models.RangeCheck.objects.count() == 1
         assert models.Checks.objects.count() == 1
         self._get_response()
@@ -219,12 +240,13 @@ class TimeseriesGroupFormDeletesRangeCheckTestCase(TimeseriesGroupFormTestCaseBa
 class TimeseriesGroupFormRangeCheckInitialValuesTestCase(
     TimeseriesGroupFormTestCaseBase
 ):
-    def setUp(self):
-        self._create_data()
-        self._create_range_check()
-        self._get_response()
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+        cls._create_range_check()
 
-    def _get_response(self):
+    def setUp(self):
+        super().setUp()
         self.response = self._get_form()
         self.soup = BeautifulSoup(self.response.content, "html.parser")
 
@@ -247,8 +269,12 @@ class TimeseriesGroupFormRangeCheckInitialValuesTestCase(
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
 class TimeseriesGroupFormRocCheckValidationTestCase(TimeseriesGroupFormTestCaseBase):
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+
     def setUp(self):
-        self._create_data()
+        super().setUp()
         self.data = self._get_basic_form_contents()
 
     def test_returns_error_if_thresholds_is_garbage(self):
@@ -269,8 +295,12 @@ class TimeseriesGroupFormRocCheckValidationTestCase(TimeseriesGroupFormTestCaseB
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
 class TimeseriesGroupFormCreatesRocCheckTestCase(TimeseriesGroupFormTestCaseBase):
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+
     def setUp(self):
-        self._create_data()
+        super().setUp()
         self._get_response()
         self.roc_check = models.RateOfChangeCheck.objects.first()
 
@@ -294,9 +324,13 @@ class TimeseriesGroupFormCreatesRocCheckTestCase(TimeseriesGroupFormTestCaseBase
 class TimeseriesGroupFormSavesExistingRocCheckTestCase(
     TimeseriesGroupFormCreatesRocCheckTestCase
 ):
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+        cls._create_roc_check()
+
     def setUp(self):
-        self._create_data()
-        self._create_roc_check()
+        super().setUp()
         self._get_response()
         roc_checks = models.RateOfChangeCheck.objects.all()
         assert roc_checks.count() == 1
@@ -316,10 +350,14 @@ class TimeseriesGroupFormSavesExistingRocCheckTestCase(
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
 class TimeseriesGroupFormDeletesRocCheckTestCase(TimeseriesGroupFormTestCaseBase):
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+        cls._create_roc_check()
+        cls._create_range_check()  # This is to ensure it's not deleted
+
     def setUp(self):
-        self._create_data()
-        self._create_roc_check()
-        self._create_range_check()  # This is to ensure it's not deleted
+        super().setUp()
         assert models.RateOfChangeCheck.objects.count() == 1
         assert models.Checks.objects.count() == 1
         self._get_response()
@@ -345,12 +383,13 @@ class TimeseriesGroupFormDeletesRocCheckTestCase(TimeseriesGroupFormTestCaseBase
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
 class TimeseriesGroupFormRocCheckInitialValuesTestCase(TimeseriesGroupFormTestCaseBase):
-    def setUp(self):
-        self._create_data()
-        self._create_roc_check()
-        self._get_response()
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+        cls._create_roc_check()
 
-    def _get_response(self):
+    def setUp(self):
+        super().setUp()
         self.response = self._get_form()
         self.soup = BeautifulSoup(self.response.content, "html.parser")
 
@@ -361,13 +400,14 @@ class TimeseriesGroupFormRocCheckInitialValuesTestCase(TimeseriesGroupFormTestCa
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
 class AggregationFormTestCase(TestCase):
-    def setUp(self):
-        self.station = mommy.make(enhydris.models.Station)
-        self.aggregation = mommy.make(
+    @classmethod
+    def setUpTestData(cls):
+        cls.station = mommy.make(enhydris.models.Station)
+        cls.aggregation = mommy.make(
             models.Aggregation,
             target_time_step="10min",
             method="sum",
-            timeseries_group__gentity=self.station,
+            timeseries_group__gentity=cls.station,
         )
 
     def test_does_not_validate_when_invalid_time_step(self):
@@ -399,22 +439,23 @@ class AggregationFormTestCase(TestCase):
 
 
 class CurvePeriodFormTestCase(TestCase):
-    def setUp(self):
-        self.station = mommy.make(enhydris.models.Station)
-        self.ci = mommy.make(
+    @classmethod
+    def setUpTestData(cls):
+        cls.station = mommy.make(enhydris.models.Station)
+        cls.ci = mommy.make(
             models.CurveInterpolation,
-            timeseries_group__gentity=self.station,
-            target_timeseries_group__gentity=self.station,
+            timeseries_group__gentity=cls.station,
+            target_timeseries_group__gentity=cls.station,
         )
-        self.period = mommy.make(
+        cls.period = mommy.make(
             models.CurvePeriod,
-            curve_interpolation=self.ci,
+            curve_interpolation=cls.ci,
             start_date=dt.date(1980, 1, 1),
             end_date=dt.date(1985, 6, 30),
         )
-        point = models.CurvePoint(curve_period=self.period, x=2.718, y=3.141)
+        point = models.CurvePoint(curve_period=cls.period, x=2.718, y=3.141)
         point.save()
-        point = models.CurvePoint(curve_period=self.period, x=4, y=5)
+        point = models.CurvePoint(curve_period=cls.period, x=4, y=5)
         point.save()
 
     def test_init(self):
@@ -479,20 +520,21 @@ class CurvePeriodsPermissionTestCase(TestCase):
 
 @override_settings(ENHYDRIS_USERS_CAN_ADD_CONTENT=True)
 class CurveInterpolationInlineTargetTimeseriesGroupTestCase(TestCaseBase):
-    def setUp(self):
-        self._create_data()
-        self.station2 = mommy.make(
-            enhydris.models.Station, creator=self.user, owner=self.organization
+    @classmethod
+    def setUpTestData(cls):
+        cls._create_data()
+        cls.station2 = mommy.make(
+            enhydris.models.Station, creator=cls.user, owner=cls.organization
         )
-        self.timeseries_group = mommy.make(
+        cls.timeseries_group = mommy.make(
             enhydris.models.TimeseriesGroup,
-            gentity=self.station,
-            variable=self.variable,
+            gentity=cls.station,
+            variable=cls.variable,
         )
-        self.timeseries_group2 = mommy.make(
+        cls.timeseries_group2 = mommy.make(
             enhydris.models.TimeseriesGroup,
-            gentity=self.station2,
-            variable=self.variable,
+            gentity=cls.station2,
+            variable=cls.variable,
         )
 
     def test_target_timeseries_group_dropdown_contains_options_from_station1(self):
@@ -517,16 +559,14 @@ class CurveInterpolationInlineTargetTimeseriesGroupTestCase(TestCaseBase):
 
     def test_target_timeseries_group_dropdown_is_empty_when_adding_station(self):
         response = self.client.get("/admin/enhydris/station/add/")
-        self.assertContains(
-            response, '<option value="" selected> --------- </option>', html=True
+        soup = BeautifulSoup(response.content.decode(), "html.parser")
+        select_id = (
+            "id_timeseriesgroup_set-0-curveinterpolation_set-0-target_timeseries_group"
         )
-        self.assertNotContains(
-            response,
-            f'<option value="{self.timeseries_group.id}">myvar</option>',
-            html=True,
+        self.assertIsNotNone(soup.find(id=select_id).find("option", value=""))
+        self.assertIsNone(
+            soup.find(id=select_id).find("option", value=f"{self.timeseries_group.id}")
         )
-        self.assertNotContains(
-            response,
-            f'<option value="{self.timeseries_group2.id}">myvar</option>',
-            html=True,
+        self.assertIsNone(
+            soup.find(id=select_id).find("option", value=f"{self.timeseries_group2.id}")
         )

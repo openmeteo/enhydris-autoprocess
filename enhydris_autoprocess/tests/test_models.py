@@ -722,14 +722,14 @@ class CurvePeriodSetCurveTestCase(TestCase):
 
 class CurveInterpolationProcessTimeseriesTestCase(TestCase):
     _index = [
-        dt.datetime(2019, 4, 30, 12, 10),
-        dt.datetime(2019, 5, 21, 10, 20),
-        dt.datetime(2019, 5, 21, 10, 30),
-        dt.datetime(2019, 5, 21, 10, 40),
-        dt.datetime(2019, 6, 21, 10, 50),
-        dt.datetime(2019, 6, 21, 11, 00),
-        dt.datetime(2019, 6, 21, 11, 10),
-        dt.datetime(2019, 7, 21, 12, 10),
+        dt.datetime(2019, 4, 30, 12, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
+        dt.datetime(2019, 5, 21, 10, 20, tzinfo=ZoneInfo("Etc/GMT-2")),
+        dt.datetime(2019, 5, 21, 10, 30, tzinfo=ZoneInfo("Etc/GMT-2")),
+        dt.datetime(2019, 5, 21, 10, 40, tzinfo=ZoneInfo("Etc/GMT-2")),
+        dt.datetime(2019, 6, 21, 10, 50, tzinfo=ZoneInfo("Etc/GMT-2")),
+        dt.datetime(2019, 6, 21, 11, 00, tzinfo=ZoneInfo("Etc/GMT-2")),
+        dt.datetime(2019, 6, 21, 11, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
+        dt.datetime(2019, 7, 21, 12, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
     ]
 
     source_timeseries = pd.DataFrame(

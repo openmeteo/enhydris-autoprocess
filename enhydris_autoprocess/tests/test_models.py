@@ -2,11 +2,6 @@ import datetime as dt
 import textwrap
 from unittest import mock
 
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    from backports.zoneinfo import ZoneInfo
-
 from django.db import DataError, IntegrityError, transaction
 from django.test import TestCase, TransactionTestCase
 
@@ -18,6 +13,7 @@ from rocc import Threshold
 
 from enhydris.models import Station, Timeseries, TimeseriesGroup, Variable
 from enhydris.tests import ClearCacheMixin
+from enhydris.tests.test_models.test_timeseries import get_tzinfo
 from enhydris_autoprocess import tasks
 from enhydris_autoprocess.models import (
     Aggregation,
@@ -136,10 +132,10 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
                 data={"value": [1.0, 2.0, 3.0, 4.0], "flags": ["", "", "", ""]},
                 columns=["value", "flags"],
                 index=[
-                    dt.datetime(2019, 5, 21, 17, 0, tzinfo=ZoneInfo("Etc/GMT-2")),
-                    dt.datetime(2019, 5, 21, 17, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
-                    dt.datetime(2019, 5, 21, 17, 20, tzinfo=ZoneInfo("Etc/GMT-2")),
-                    dt.datetime(2019, 5, 21, 17, 30, tzinfo=ZoneInfo("Etc/GMT-2")),
+                    dt.datetime(2019, 5, 21, 17, 0, tzinfo=get_tzinfo("Etc/GMT-2")),
+                    dt.datetime(2019, 5, 21, 17, 10, tzinfo=get_tzinfo("Etc/GMT-2")),
+                    dt.datetime(2019, 5, 21, 17, 20, tzinfo=get_tzinfo("Etc/GMT-2")),
+                    dt.datetime(2019, 5, 21, 17, 30, tzinfo=get_tzinfo("Etc/GMT-2")),
                 ],
             )
         )
@@ -151,8 +147,8 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
                 data={"value": [1.0, 2.0], "flags": ["", ""]},
                 columns=["value", "flags"],
                 index=[
-                    dt.datetime(2019, 5, 21, 17, 0, tzinfo=ZoneInfo("Etc/GMT-2")),
-                    dt.datetime(2019, 5, 21, 17, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
+                    dt.datetime(2019, 5, 21, 17, 0, tzinfo=get_tzinfo("Etc/GMT-2")),
+                    dt.datetime(2019, 5, 21, 17, 10, tzinfo=get_tzinfo("Etc/GMT-2")),
                 ],
             ),
             default_timezone="Etc/GMT-2",
@@ -169,8 +165,8 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
             data={"value": [3.0, 4.0], "flags": ["", ""]},
             columns=["value", "flags"],
             index=[
-                dt.datetime(2019, 5, 21, 17, 20, tzinfo=ZoneInfo("Etc/GMT-2")),
-                dt.datetime(2019, 5, 21, 17, 30, tzinfo=ZoneInfo("Etc/GMT-2")),
+                dt.datetime(2019, 5, 21, 17, 20, tzinfo=get_tzinfo("Etc/GMT-2")),
+                dt.datetime(2019, 5, 21, 17, 30, tzinfo=get_tzinfo("Etc/GMT-2")),
             ],
         )
         expected_arg.index.name = "date"
@@ -181,10 +177,10 @@ class AutoProcessExecuteDealsOnlyWithNewerTimeseriesPartTestCase(TestCase):
             data={"value": [1.0, 2.0, 3.0, 4.0], "flags": ["", "", "", ""]},
             columns=["value", "flags"],
             index=[
-                dt.datetime(2019, 5, 21, 17, 0, tzinfo=ZoneInfo("Etc/GMT-2")),
-                dt.datetime(2019, 5, 21, 17, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
-                dt.datetime(2019, 5, 21, 17, 20, tzinfo=ZoneInfo("Etc/GMT-2")),
-                dt.datetime(2019, 5, 21, 17, 30, tzinfo=ZoneInfo("Etc/GMT-2")),
+                dt.datetime(2019, 5, 21, 17, 0, tzinfo=get_tzinfo("Etc/GMT-2")),
+                dt.datetime(2019, 5, 21, 17, 10, tzinfo=get_tzinfo("Etc/GMT-2")),
+                dt.datetime(2019, 5, 21, 17, 20, tzinfo=get_tzinfo("Etc/GMT-2")),
+                dt.datetime(2019, 5, 21, 17, 30, tzinfo=get_tzinfo("Etc/GMT-2")),
             ],
         )
         expected_result.index.name = "date"
@@ -722,14 +718,14 @@ class CurvePeriodSetCurveTestCase(TestCase):
 
 class CurveInterpolationProcessTimeseriesTestCase(TestCase):
     _index = [
-        dt.datetime(2019, 4, 30, 12, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
-        dt.datetime(2019, 5, 21, 10, 20, tzinfo=ZoneInfo("Etc/GMT-2")),
-        dt.datetime(2019, 5, 21, 10, 30, tzinfo=ZoneInfo("Etc/GMT-2")),
-        dt.datetime(2019, 5, 21, 10, 40, tzinfo=ZoneInfo("Etc/GMT-2")),
-        dt.datetime(2019, 6, 21, 10, 50, tzinfo=ZoneInfo("Etc/GMT-2")),
-        dt.datetime(2019, 6, 21, 11, 00, tzinfo=ZoneInfo("Etc/GMT-2")),
-        dt.datetime(2019, 6, 21, 11, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
-        dt.datetime(2019, 7, 21, 12, 10, tzinfo=ZoneInfo("Etc/GMT-2")),
+        dt.datetime(2019, 4, 30, 12, 10, tzinfo=get_tzinfo("Etc/GMT-2")),
+        dt.datetime(2019, 5, 21, 10, 20, tzinfo=get_tzinfo("Etc/GMT-2")),
+        dt.datetime(2019, 5, 21, 10, 30, tzinfo=get_tzinfo("Etc/GMT-2")),
+        dt.datetime(2019, 5, 21, 10, 40, tzinfo=get_tzinfo("Etc/GMT-2")),
+        dt.datetime(2019, 6, 21, 10, 50, tzinfo=get_tzinfo("Etc/GMT-2")),
+        dt.datetime(2019, 6, 21, 11, 00, tzinfo=get_tzinfo("Etc/GMT-2")),
+        dt.datetime(2019, 6, 21, 11, 10, tzinfo=get_tzinfo("Etc/GMT-2")),
+        dt.datetime(2019, 7, 21, 12, 10, tzinfo=get_tzinfo("Etc/GMT-2")),
     ]
 
     source_timeseries = pd.DataFrame(

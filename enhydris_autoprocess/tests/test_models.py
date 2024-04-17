@@ -326,13 +326,13 @@ class RangeCheckTestCase(TestCase):
 
 class RangeCheckProcessTimeseriesTestCase(TestCase):
     _index = [
-        dt.datetime(2019, 5, 21, 10, 20),
-        dt.datetime(2019, 5, 21, 10, 30),
-        dt.datetime(2019, 5, 21, 10, 40),
-        dt.datetime(2019, 5, 21, 10, 50),
-        dt.datetime(2019, 5, 21, 11, 00),
-        dt.datetime(2019, 5, 21, 11, 10),
-        dt.datetime(2019, 5, 21, 11, 20),
+        dt.datetime(2019, 5, 21, 10, 20, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 30, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 40, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 50, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 00, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 10, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 20, tzinfo=dt.timezone.utc),
     ]
 
     source_timeseries = pd.DataFrame(
@@ -468,13 +468,13 @@ class RateOfChangeCheckThresholdsTestCase(TestCase):
 
 class RateOfChangeCheckProcessTimeseriesTestCase(TestCase):
     _index = [
-        dt.datetime(2019, 5, 21, 10, 20),
-        dt.datetime(2019, 5, 21, 10, 30),
-        dt.datetime(2019, 5, 21, 10, 40),
-        dt.datetime(2019, 5, 21, 10, 50),
-        dt.datetime(2019, 5, 21, 11, 00),
-        dt.datetime(2019, 5, 21, 11, 10),
-        dt.datetime(2019, 5, 21, 11, 20),
+        dt.datetime(2019, 5, 21, 10, 20, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 30, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 40, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 50, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 00, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 10, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 20, tzinfo=dt.timezone.utc),
     ]
 
     source_timeseries = pd.DataFrame(
@@ -923,23 +923,23 @@ class AggregationTestCase(TestCase):
 
 class AggregationProcessTimeseriesTestCase(TestCase):
     _index = [
-        dt.datetime(2019, 5, 21, 10, 00),
-        dt.datetime(2019, 5, 21, 10, 10),
-        dt.datetime(2019, 5, 21, 10, 21),
-        dt.datetime(2019, 5, 21, 10, 31),
-        dt.datetime(2019, 5, 21, 10, 40),
-        dt.datetime(2019, 5, 21, 10, 50),
-        dt.datetime(2019, 5, 21, 11, 00),
-        dt.datetime(2019, 5, 21, 11, 10),
-        dt.datetime(2019, 5, 21, 11, 20),
-        dt.datetime(2019, 5, 21, 11, 30),
-        dt.datetime(2019, 5, 21, 11, 40),
-        dt.datetime(2019, 5, 21, 11, 50),
-        dt.datetime(2019, 5, 21, 12, 00),
-        dt.datetime(2019, 5, 21, 12, 10),
-        dt.datetime(2019, 5, 21, 12, 20),
-        dt.datetime(2019, 5, 21, 12, 30),
-        dt.datetime(2019, 5, 21, 12, 40),
+        dt.datetime(2019, 5, 21, 10, 00, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 10, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 21, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 31, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 40, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 10, 50, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 00, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 10, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 20, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 30, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 40, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 11, 50, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 12, 00, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 12, 10, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 12, 20, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 12, 30, tzinfo=dt.timezone.utc),
+        dt.datetime(2019, 5, 21, 12, 40, tzinfo=dt.timezone.utc),
     ]
     _values = [2, 3, 5, 7, 11, 13, 17, 19, np.nan, 29, 31, 37, 41, 43, 47, 53, 59]
 
@@ -952,22 +952,25 @@ class AggregationProcessTimeseriesTestCase(TestCase):
     expected_result_for_max_missing_zero = pd.DataFrame(
         data={"value": [56.0], "flags": [""]},
         columns=["value", "flags"],
-        index=[dt.datetime(2019, 5, 21, 10, 59)],
+        index=[dt.datetime(2019, 5, 21, 10, 59, tzinfo=dt.timezone.utc)],
     )
 
     expected_result_for_max_missing_one = pd.DataFrame(
         data={"value": [56.0, 157.0], "flags": ["", "MISS"]},
         columns=["value", "flags"],
-        index=[dt.datetime(2019, 5, 21, 10, 59), dt.datetime(2019, 5, 21, 11, 59)],
+        index=[
+            dt.datetime(2019, 5, 21, 10, 59, tzinfo=dt.timezone.utc),
+            dt.datetime(2019, 5, 21, 11, 59, tzinfo=dt.timezone.utc),
+        ],
     )
 
     expected_result_for_max_missing_five = pd.DataFrame(
         data={"value": [2.0, 56.0, 157.0], "flags": ["MISS", "", "MISS"]},
         columns=["value", "flags"],
         index=[
-            dt.datetime(2019, 5, 21, 9, 59),
-            dt.datetime(2019, 5, 21, 10, 59),
-            dt.datetime(2019, 5, 21, 11, 59),
+            dt.datetime(2019, 5, 21, 9, 59, tzinfo=dt.timezone.utc),
+            dt.datetime(2019, 5, 21, 10, 59, tzinfo=dt.timezone.utc),
+            dt.datetime(2019, 5, 21, 11, 59, tzinfo=dt.timezone.utc),
         ],
     )
 
@@ -1041,7 +1044,7 @@ class AggregationProcessTimeseriesWhenNoTimeStepTestCase(TestCase):
         source_timeseries = pd.DataFrame(
             data={"value": [42], "flags": [""]},
             columns=["value", "flags"],
-            index=[dt.datetime(2019, 5, 21, 11, 20)],
+            index=[dt.datetime(2019, 5, 21, 11, 20, tzinfo=dt.timezone.utc)],
         )
         self.aggregation._htimeseries = HTimeseries(source_timeseries)
         self.aggregation._htimeseries.time_step = ""

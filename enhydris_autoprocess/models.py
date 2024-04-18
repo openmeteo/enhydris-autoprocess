@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 import numpy as np
 import pandas as pd
+from haggregate import RegularizationMode as RM
 from haggregate import RegularizeError, aggregate, regularize
 from htimeseries import HTimeseries
 from rocc import Threshold, rocc
@@ -472,7 +473,8 @@ class Aggregation(AutoProcess):
         return self._trim_last_record_if_not_complete(aggregated)
 
     def _regularize_time_series(self, source_htimeseries):
-        return regularize(source_htimeseries, new_date_flag="DATEINSERT")
+        mode = self.method == "mean" and RM.INSTANTANEOUS or RM.INTERVAL
+        return regularize(source_htimeseries, new_date_flag="DATEINSERT", mode=mode)
 
     def _aggregate_time_series(self, source_htimeseries):
         source_step = self._get_source_step(source_htimeseries)

@@ -1,2 +1,2 @@
-haggregate>=3,<4
+haggregate>=3.1,<4
 rocc>=3,<4

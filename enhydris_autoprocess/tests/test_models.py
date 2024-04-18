@@ -7,6 +7,7 @@ from django.test import TestCase, TransactionTestCase
 
 import numpy as np
 import pandas as pd
+from haggregate import RegularizationMode as RM
 from htimeseries import HTimeseries
 from model_mommy import mommy
 from rocc import Threshold
@@ -1056,3 +1057,49 @@ class AggregationProcessTimeseriesWhenNoTimeStepTestCase(TestCase):
             "The time step is malformed or is specified in months. Only time steps "
             "specified in minutes, hours or days are supported."
         )
+
+
+@mock.patch("enhydris_autoprocess.models.Aggregation._aggregate_time_series")
+@mock.patch("enhydris_autoprocess.models.regularize")
+class AggregationRegularizationModeTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        station = mommy.make(Station)
+        timeseries_group = mommy.make(
+            TimeseriesGroup, gentity=station, variable__descr="hello"
+        )
+        cls.aggregation = mommy.make(
+            Aggregation,
+            timeseries_group=timeseries_group,
+            target_time_step="H",
+            method="sum",
+            max_missing=3,
+            resulting_timestamp_offset="",
+        )
+        source_timeseries = pd.DataFrame(
+            data={"value": [42], "flags": [""]},
+            columns=["value", "flags"],
+            index=[dt.datetime(2019, 5, 21, 11, 20, tzinfo=dt.timezone.utc)],
+        )
+        cls.aggregation._htimeseries = HTimeseries(source_timeseries)
+        cls.aggregation._htimeseries.time_step = "10min"
+
+    def test_sum(self, mock_regularize, mock_haggregate):
+        self.aggregation.method = "sum"
+        self.aggregation.process_timeseries()
+        self.assertEqual(mock_regularize.call_args.kwargs["mode"], RM.INTERVAL)
+
+    def test_mean(self, mock_regularize, mock_haggregate):
+        self.aggregation.method = "mean"
+        self.aggregation.process_timeseries()
+        self.assertEqual(mock_regularize.call_args.kwargs["mode"], RM.INSTANTANEOUS)
+
+    def test_min(self, mock_regularize, mock_haggregate):
+        self.aggregation.method = "min"
+        self.aggregation.process_timeseries()
+        self.assertEqual(mock_regularize.call_args.kwargs["mode"], RM.INTERVAL)
+
+    def test_max(self, mock_regularize, mock_haggregate):
+        self.aggregation.method = "max"
+        self.aggregation.process_timeseries()
+        self.assertEqual(mock_regularize.call_args.kwargs["mode"], RM.INTERVAL)

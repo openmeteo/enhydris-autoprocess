@@ -907,9 +907,7 @@ class AggregationTestCase(TestCase):
         self.assertEqual(aggregation.target_timeseries.id, 41)
 
     def test_automatically_creates_target_timeseries(self):
-        aggregation = mommy.make(
-            Aggregation, timeseries_group=self.timeseries_group, target_time_step="H"
-        )
+        aggregation = self._mommy_make_aggregation()
         self.assertFalse(Timeseries.objects.exists())
         aggregation.target_timeseries.id
         self.assertTrue(Timeseries.objects.exists())
@@ -1001,6 +999,15 @@ class AggregationProcessTimeseriesTestCase(TestCase):
     def test_execute_for_max_missing_five(self):
         result = self._execute(max_missing=5)
         self.assert_frame_equal(result, self.expected_result_for_max_missing_five)
+
+    def test_execute_when_target_timeseries_is_already_complete(self):
+        self._execute(max_missing=5)
+        # Now the target time series is complete. Executing a second time should do
+        # nothing. (We need to get the aggregation from the db rather than using
+        # self.aggregation, to ensure aggregation.htimeseries is created anew.)
+        aggregation = Aggregation.objects.first()
+        result = aggregation.process_timeseries().data
+        self.assertTrue(result.empty)
 
     def test_execute_for_max_missing_too_high(self):
         result = self._execute(max_missing=10000)

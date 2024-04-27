@@ -463,6 +463,8 @@ class Aggregation(AutoProcess):
             )
 
     def process_timeseries(self):
+        if self.htimeseries.data.empty:
+            return HTimeseries()
         self.source_end_date = self.htimeseries.data.index[-1]
         try:
             regularized = self._regularize_time_series(self.htimeseries)

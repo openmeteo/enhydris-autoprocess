@@ -437,7 +437,9 @@ class Aggregation(AutoProcess):
     @property
     def target_timeseries(self):
         obj, created = self.timeseries_group.timeseries_set.get_or_create(
-            type=Timeseries.AGGREGATED, time_step=self.target_time_step
+            type=Timeseries.AGGREGATED,
+            time_step=self.target_time_step,
+            name=self.get_method_display(),
         )
         return obj
 

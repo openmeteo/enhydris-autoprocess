@@ -805,9 +805,12 @@ class AggregationTestCase(TestCase):
         aggregation.save()
         self.assertEqual(Aggregation.objects.count(), 1)
 
-    def _mommy_make_aggregation(self):
+    def _mommy_make_aggregation(self, method="sum"):
         return mommy.make(
-            Aggregation, timeseries_group=self.timeseries_group, target_time_step="H"
+            Aggregation,
+            timeseries_group=self.timeseries_group,
+            target_time_step="H",
+            method=method,
         )
 
     def test_update(self):
@@ -881,13 +884,14 @@ class AggregationTestCase(TestCase):
         )
         self.assertEqual(aggregation.source_timeseries.id, 42)
 
-    def _make_timeseries(self, id, type):
+    def _make_timeseries(self, id, type, name=""):
         return mommy.make(
             Timeseries,
             id=id,
             timeseries_group=self.timeseries_group,
             type=type,
             time_step="H",
+            name=name,
         )
 
     def test_automatically_creates_source_timeseries(self):
@@ -900,9 +904,12 @@ class AggregationTestCase(TestCase):
 
     def test_target_timeseries(self):
         self._make_timeseries(id=42, type=Timeseries.INITIAL)
-        self._make_timeseries(id=41, type=Timeseries.AGGREGATED)
+        self._make_timeseries(id=41, type=Timeseries.AGGREGATED, name="Mean")
         aggregation = mommy.make(
-            Aggregation, timeseries_group=self.timeseries_group, target_time_step="H"
+            Aggregation,
+            timeseries_group=self.timeseries_group,
+            target_time_step="H",
+            method="mean",
         )
         self.assertEqual(aggregation.target_timeseries.id, 41)
 
@@ -911,6 +918,17 @@ class AggregationTestCase(TestCase):
         self.assertFalse(Timeseries.objects.exists())
         aggregation.target_timeseries.id
         self.assertTrue(Timeseries.objects.exists())
+
+    def test_creates_different_timeseries_for_different_methods(self):
+        aggregation1 = self._mommy_make_aggregation(method="mean")
+        aggregation2 = self._mommy_make_aggregation(method="max")
+        self.assertFalse(Timeseries.objects.exists())
+        aggregation1.target_timeseries.id
+        self.assertEqual(Timeseries.objects.count(), 2)
+        aggregation2.target_timeseries.id
+        self.assertEqual(Timeseries.objects.count(), 3)
+        names = {x.name for x in Timeseries.objects.filter(type=Timeseries.AGGREGATED)}
+        self.assertEqual(names, {"Mean", "Max"})
 
     def test_checks_target_time_step(self):
         aggregation = Aggregation(
